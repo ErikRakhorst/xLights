@@ -179,10 +179,11 @@
 					<Add option="`wx-config --version=3.1 --cflags`" />
 					<Add option="`pkg-config --cflags libavformat libavcodec libavutil  libswresample libswscale`" />
 					<Add option="`pkg-config --cflags gstreamer-1.0 gstreamer-video-1.0`" />
-					<Add option="`pkg-config --cflags lua53`" />
+					<Add option="`pkg-config --cflags lua`" />
 					<Add option="-Winvalid-pch" />
 					<Add option="-DWX_PRECOMP" />
 					<Add option="-DLINUX" />
+					<Add option="-DLUA_COMPAT_BITLIB" />
 					<Add option="-D__WXDEBUG__" />
 					<Add option='-D__cdecl=&quot;&quot;' />
 					<Add directory="include" />
@@ -208,7 +209,7 @@
 					<Add option="`sdl2-config --libs`" />
 					<Add option="`wx-config --version=3.1 --libs std,media,gl,aui,propgrid`" />
 					<Add option="`pkg-config --libs gstreamer-1.0 gstreamer-video-1.0`" />
-					<Add option="`pkg-config --libs lua53`" />
+					<Add option="`pkg-config --libs lua`" />
 					<Add option="-lexpat" />
 					<Add option="-rdynamic" />
 					<Add option="-lz" />
@@ -232,7 +233,7 @@
 					<Add option="`wx-config --version=3.1 --cflags`" />
 					<Add option="`pkg-config --cflags gstreamer-1.0 gstreamer-video-1.0`" />
 					<Add option="`pkg-config --cflags libavformat libavcodec libavutil  libswresample libswscale`" />
-					<Add option="`pkg-config --cflags lua53`" />
+					<Add option="`pkg-config --cflags lua`" />
 					<Add option="-Winvalid-pch" />
 					<Add option="-DWX_PRECOMP" />
 					<Add option="-DLINUX" />
@@ -261,7 +262,7 @@
 					<Add option="`sdl2-config --libs`" />
 					<Add option="`wx-config --version=3.1 --libs std,media,gl,aui,propgrid`" />
 					<Add option="`pkg-config --libs gstreamer-1.0 gstreamer-video-1.0`" />
-					<Add option="`pkg-config --libs lua53`" />
+					<Add option="`pkg-config --libs lua`" />
 					<Add option="-lexpat" />
 					<Add option="-rdynamic" />
 					<Add option="-lz" />

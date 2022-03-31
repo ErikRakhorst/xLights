@@ -25129,10 +25129,6 @@ namespace sol {
 #ifdef SOL_LUAJIT
 						luaL_requiref(L, "bit32", luaopen_bit, 1);
 						lua_pop(L, 1);
-#elif (SOL_LUA_VESION_I_ == 502) || defined(LUA_COMPAT_BITLIB) || defined(LUA_COMPAT_5_2)
-						luaL_requiref(L, "bit32", luaopen_bit32, 1);
-						lua_pop(L, 1);
-#else
 #endif // Lua 5.2 only (deprecated in 5.3 (503)) (Can be turned on with Compat flags)
 						break;
 					case lib::io:
