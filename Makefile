@@ -1,4 +1,4 @@
-PREFIX          = /usr
+PREFIX          = /opt/xLights/localbuild
 
 # When not installing to a custom location append that location
 # to PKG_CONFIG_PATH so that pkgconfig can find the libraries installed.
