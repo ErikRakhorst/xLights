@@ -694,6 +694,12 @@ bool ModelManager::ReworkStartChannel() const
     for (const auto& it : outputManager->GetControllers())
     {
         auto caps = it->GetControllerCaps();
+
+        wxString serialPrefix;
+        if (caps && caps->DMXAfterPixels()) {
+            serialPrefix = "zzz";
+        }
+
         std::map<std::string, std::list<Model*>> cmodels;
         std::lock_guard<std::recursive_mutex> lock(_modelMutex);
         for (auto itm : models)
@@ -710,7 +716,7 @@ bool ModelManager::ReworkStartChannel() const
                 }
                 else
                 {
-                    cc = wxString::Format("%s:%02d", itm.second->GetControllerProtocol(), itm.second->GetControllerPort()).Lower();
+                    cc = wxString::Format("%s%s:%02d", serialPrefix, itm.second->GetControllerProtocol(), itm.second->GetControllerPort()).Lower();
                 }
                 if (cmodels.find(cc) == cmodels.end())
                 {
@@ -1262,8 +1268,11 @@ Model* ModelManager::CreateDefaultModel(const std::string &type, const std::stri
         if (type == "DmxServo3Axis") {
             node->DeleteAttribute("DisplayAs");
             node->AddAttribute("DisplayAs", "DmxServo3d");
+            node->DeleteAttribute("NumServos");
             node->AddAttribute("NumServos", "3");
+            node->DeleteAttribute("NumStatic");
             node->AddAttribute("NumStatic", "1");
+            node->DeleteAttribute("NumMotion");
             node->AddAttribute("NumMotion", "3");
             node->DeleteAttribute("parm1");
             node->AddAttribute("parm1", "6");
@@ -1407,6 +1416,7 @@ Model *ModelManager::CreateModel(wxXmlNode *node, int previewW, int previewH, bo
         type = "DmxServo3d";
         node->DeleteAttribute("DisplayAs");
         node->AddAttribute("DisplayAs", type);
+        node->DeleteAttribute("NumServos");
         node->AddAttribute("NumServos", "3");
         node->DeleteAttribute("parm1");
         node->AddAttribute("parm1", "6");

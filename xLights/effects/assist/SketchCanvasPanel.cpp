@@ -14,6 +14,8 @@ namespace
     const double HandleRadiusSquared = HandleRadius * HandleRadius;
     const double HandleDiameter = 2 * HandleRadius;
 
+    const double ZoomPointChangeThreshold = 20.;
+
     struct LinearInterpolater {
         double operator()(double t) const
         {
@@ -69,11 +71,10 @@ void SketchCanvasPanel::OnSketchPaint(wxPaintEvent& /*event*/)
         if (m_wheelRotation) {
             zoomLevel = interpolate(m_wheelRotation, 0, 1., MouseWheelLimit, 8., LinearInterpolater());
             wxGraphicsMatrix m = gc->CreateMatrix();
-            wxPoint2DDouble pt(NormalizedToUI(m_normalizedZoomPt));
             m.Translate(-m_canvasTranslation.m_x, -m_canvasTranslation.m_y);
-            m.Translate(pt.m_x, pt.m_y);
+            m.Translate(m_zoomPoint.m_x, m_zoomPoint.m_y);
             m.Scale(zoomLevel, zoomLevel);
-            m.Translate(-pt.m_x, -pt.m_y);
+            m.Translate(-m_zoomPoint.m_x, -m_zoomPoint.m_y);
             gc->SetTransform(m);
 
             m.Get(m_matrixComponents, m_matrixComponents + 1, m_matrixComponents + 2,
@@ -444,13 +445,25 @@ void SketchCanvasPanel::OnSketchEntered(wxMouseEvent& /*event*/)
 
 void SketchCanvasPanel::OnSketchMouseWheel(wxMouseEvent& event)
 {
+    int rotationBefore = m_wheelRotation;
     m_wheelRotation += event.GetWheelRotation();
     m_wheelRotation = std::clamp(m_wheelRotation, 0, MouseWheelLimit);
-    if (!m_wheelRotation)
+    if (!m_wheelRotation) {
         m_canvasTranslation = wxPoint2DDouble();
-
-    // todo? - take zoom and/or canvas translation into account
-    m_normalizedZoomPt = UItoNormalized(event.GetPosition());
+        m_zoomPoint = wxPoint2DDouble();
+    }  else {
+        if (m_zoomPoint == wxPoint2DDouble() )
+            m_zoomPoint = event.GetPosition();
+        double distance = m_zoomPoint.GetDistance(event.GetPosition() + m_canvasTranslation);
+        if (distance > ZoomPointChangeThreshold) {
+            // Much of the time, we're zooming in and out near the same point.
+            // If that zoom-point seems to be different, we adjust.
+            m_canvasTranslation -= event.GetPosition() - m_zoomPoint;
+            m_zoomPoint = event.GetPosition();
+        } else {
+            m_zoomPoint = event.GetPosition() + m_canvasTranslation;
+        }
+    }
 
     Refresh();
 }
@@ -499,7 +512,8 @@ void SketchCanvasPanel::UpdatePathState(SketchCanvasPathState pathState)
 
     // If we're Undefined, have some handles, and no path
     // selected, I think we've added a new one!!
-    if (m_pathState == SketchCanvasPathState::Undefined && !m_handles.empty() && m_sketchCanvasParent->GetSelectedPathIndex() < 0) {
+    bool inUndefinedStateAndHaveMultipleHandles = (m_pathState == SketchCanvasPathState::Undefined && m_handles.size() > 1);
+    if (inUndefinedStateAndHaveMultipleHandles && m_sketchCanvasParent->GetSelectedPathIndex() < 0) {
         auto path = CreatePathFromHandles();
         if (path != nullptr) {
             SketchEffectSketch& sketch(m_sketchCanvasParent->GetSketch());
@@ -509,7 +523,7 @@ void SketchCanvasPanel::UpdatePathState(SketchCanvasPathState pathState)
             m_sketchCanvasParent->SelectLastPath();
         }
     // 'continuing an existing path' case
-    } else if (m_pathState == SketchCanvasPathState::Undefined && !m_handles.empty()) {
+    } else if (inUndefinedStateAndHaveMultipleHandles) {
         auto path = CreatePathFromHandles();
         if (path != nullptr) {
             SketchEffectSketch& sketch(m_sketchCanvasParent->GetSketch());
@@ -520,6 +534,12 @@ void SketchCanvasPanel::UpdatePathState(SketchCanvasPathState pathState)
                 m_sketchCanvasParent->NotifySketchUpdated();
             }
         }
+    }
+
+    // A completed path should never result in a single handle
+    if (m_pathState == SketchCanvasPathState::Undefined && m_handles.size() == 1) {
+        m_handles.clear();
+        Refresh();
     }
 }
 
@@ -542,7 +562,11 @@ void SketchCanvasPanel::UpdateHandlesForPath(long pathIndex)
 
     auto iter = sketch.paths().cbegin();
     std::advance(iter, pathIndex);
-
+ 
+    enum SegmentType { Unknown,
+                       Line,
+                       Quadratic,
+                       Cubic } finalSegmentType = Unknown;
     auto pathSegments((*iter)->segments());
     m_handles.push_back(HandlePoint(pathSegments.front()->StartPoint()));
     for (auto iter = pathSegments.cbegin(); iter != pathSegments.cend(); ++iter) {
@@ -552,18 +576,34 @@ void SketchCanvasPanel::UpdateHandlesForPath(long pathIndex)
         std::shared_ptr<SketchCubicBezier> cubic;
         if (std::dynamic_pointer_cast<SketchLine>(pathSegment) != nullptr) {
             m_handles.push_back(HandlePoint(pathSegment->EndPoint()));
+            finalSegmentType = Line;
         } else if ((quadratic = std::dynamic_pointer_cast<SketchQuadraticBezier>(pathSegment)) != nullptr) {
             m_handles.push_back(HandlePoint(quadratic->ControlPoint(), QuadraticControlPt));
             m_handles.push_back(HandlePoint(quadratic->EndPoint(), QuadraticCurveEnd));
+            finalSegmentType = Quadratic;
         } else if ((cubic = std::dynamic_pointer_cast<SketchCubicBezier>(pathSegment)) != nullptr) {
             m_handles.push_back(HandlePoint(cubic->ControlPoint1(), CubicControlPt1));
             m_handles.push_back(HandlePoint(cubic->ControlPoint2(), CubicControlPt2));
             m_handles.push_back(HandlePoint(cubic->EndPoint(), CubicCurveEnd));
+            finalSegmentType = Cubic;
         }
     }
 
     if ((*iter)->isClosed() && m_handles.size() >= 3) {
-        m_handles.pop_back();
+        switch (finalSegmentType) {
+        case Line:
+            m_handles.pop_back();
+            break;
+        case Quadratic:
+            m_handles.pop_back();
+            m_handles.pop_back();
+            break;
+        case Cubic:
+            m_handles.pop_back();
+            m_handles.pop_back();
+            m_handles.pop_back();
+            break;
+        }
         m_pathClosed = true;
     }
 

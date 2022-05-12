@@ -34,6 +34,11 @@ namespace
                    ? (loOut + (hiOut - loOut) * interpolater((x - loIn) / (hiIn - loIn)))
                    : ((loOut + hiOut) / 2);
     }
+
+    double calcPercentage(double v, double s, double e)
+    {
+        return (v - s) / (e - s);
+    }
 }
 
 SketchEffect::SketchEffect(int id) :
@@ -51,15 +56,21 @@ void SketchEffect::Render(Effect* /*effect*/, SettingsMap& settings, RenderBuffe
     double progress = buffer.GetEffectTimeIntervalPosition(1.f);
 
     std::string sketchDef = settings.Get("TEXTCTRL_SketchDef", "");
-    int drawPercentage = std::stoi(settings.Get("SLIDER_DrawPercentage", "40"));
-    int thickness = GetValueCurveInt("Thickness", 1, settings, progress, 1, 10, buffer.GetStartTimeMS(), buffer.GetEndTimeMS());
-    bool motionEnabled = std::stoi(settings.Get("CHECKBOX_MotionEnabled", "0"));
-    int motionPercentage = std::stoi(settings.Get("SLIDER_MotionPercentage", "100"));
+    double drawPercentage = GetValueCurveDouble("DrawPercentage", SketchPanel::DrawPercentageDef, settings, progress,
+                                                SketchPanel::DrawPercentageMin, SketchPanel::DrawPercentageMax,
+                                                buffer.GetStartTimeMS(), buffer.GetEndTimeMS());
+    int thickness = GetValueCurveInt("Thickness", SketchPanel::ThicknessDef, settings, progress,
+                                     SketchPanel::ThicknessMin, SketchPanel::ThicknessMax,
+                                     buffer.GetStartTimeMS(), buffer.GetEndTimeMS());
+    bool motionEnabled = settings.GetBool("CHECKBOX_MotionEnabled");
+    int motionPercentage = GetValueCurveInt("MotionPercentage", SketchPanel::MotionPercentageDef, settings, progress,
+                                            SketchPanel::MotionPercentageMin, SketchPanel::MotionPercentageMax,
+                                            buffer.GetStartTimeMS(), buffer.GetEndTimeMS());
 
     xlColorVector colors(buffer.GetColorCount());
     for (size_t i = 0; i < buffer.GetColorCount(); ++i)
         colors[i] = buffer.palette.GetColor(i);
-
+    
     if (sketchDef.empty())
         return;
     SketchEffectSketch sketch(SketchEffectSketch::SketchFromString(sketchDef));
@@ -113,13 +124,20 @@ void SketchEffect::SetDefaultParameters()
 
     SetTextValue(p->TextCtrl_SketchDef, SketchEffectSketch::DefaultSketchString());
 
+    p->BitmapButton_DrawPercentage->SetActive(false);
     p->BitmapButton_Thickness->SetActive(false);
+    p->BitmapButton_MotionPercentage->SetActive(false);
 
     SetCheckBoxValue(p->CheckBox_MotionEnabled, false);
 
-    SetSliderValue(p->Slider_DrawPercentage, 40);
-    SetSliderValue(p->Slider_Thickness, 1);
-    SetSliderValue(p->Slider_MotionPercentage, 100);
+    SetSliderValue(p->Slider_SketchBackgroundOpacity, 0x30);
+    SetSliderValue(p->Slider_DrawPercentage, SketchPanel::DrawPercentageDef);
+    SetSliderValue(p->Slider_Thickness, SketchPanel::ThicknessDef);
+    SetSliderValue(p->Slider_MotionPercentage, SketchPanel::MotionPercentageDef);
+
+    p->FilePicker_SketchBackground->SetFileName(wxFileName());
+
+    p->ValidateWindow();
 }
 
 bool SketchEffect::needToAdjustSettings( const std::string& /*version*/ )
@@ -159,6 +177,9 @@ AssistPanel* SketchEffect::GetAssistPanel(wxWindow* parent, xLightsFrame* /*xl_f
     //sketchAssistPanel->SetxLightsFrame(xl_frame);
     assistPanel->AddPanel(sketchAssistPanel, wxALL | wxEXPAND);
 
+    m_sketchAssistPanel = sketchAssistPanel;
+    updateSketchAssistBackground();
+
     return assistPanel;
 }
 
@@ -184,18 +205,29 @@ void SketchEffect::renderSketch(const SketchEffectSketch& sketch, wxImage& img, 
     double maxProgress = hasMotion ? (1. + motionPercentage) : 1.;
     double adjustedProgress = interpolate(progress, 0., 0., 1., maxProgress, LinearInterpolater());
 
-    // ... but we do a different adjustment for the non-motion case
-    if (!hasMotion) {
-        if (progress > 0.5)
-            adjustedProgress = 1.0;
-        else
-            adjustedProgress = interpolate(progress, 0.0, 0.0, drawPercentage, 1.0, LinearInterpolater());
-    }
-
+    // ... but we do a slightly different adjustment for the non-motion case
+    if (!hasMotion)
+        adjustedProgress = interpolate(progress, 0.0, 0.0, drawPercentage, 1.0, LinearInterpolater());
+  
     double totalLength = 0.;
     for (const auto& path : paths)
         totalLength += path->Length();
-    
+
+    // Single closed path with motion is a special case for now... since the motion is supposed to
+    // wrap to the beginning of the path, it's unclear when we would ever move on to the next path
+    // unless a new setting was added
+    if (hasMotion && paths.size() == 1 && paths.front()->isClosed()) {
+        auto path = paths.front();
+        wxColor color(colors[0].asWxColor());
+        wxPen pen(color, lineThickness);
+        gc->SetPen(pen);
+
+        path->drawPartialPath(gc.get(), sz, progress, progress + motionPercentage);
+        if (progress + motionPercentage > 1.)
+            path->drawPartialPath(gc.get(), sz, 0., progress + motionPercentage - 1.);
+        return;
+    }
+ 
     double cumulativeLength = 0.;
     int i = 0;
     for (auto iter = paths.cbegin(); iter != paths.cend(); ++iter, ++i)
@@ -210,11 +242,11 @@ void SketchEffect::renderSketch(const SketchEffectSketch& sketch, wxImage& img, 
             (*iter)->drawEntirePath(gc.get(), sz);
         else {
             double percentageAtStartOfThisPath = cumulativeLength / totalLength;
-            double percentageThroughThisPath = (adjustedProgress - percentageAtStartOfThisPath) / (percentageAtEndOfThisPath - percentageAtStartOfThisPath);
+            double percentageThroughThisPath = calcPercentage(adjustedProgress, percentageAtStartOfThisPath, percentageAtEndOfThisPath);
             if (!hasMotion)
                 (*iter)->drawPartialPath(gc.get(), sz, std::nullopt, percentageThroughThisPath);
             else {
-                double drawPercentageThroughThisPath = (adjustedProgress - motionPercentage - percentageAtStartOfThisPath) / (percentageAtEndOfThisPath - percentageAtStartOfThisPath);
+                double drawPercentageThroughThisPath = calcPercentage(adjustedProgress - motionPercentage, percentageAtStartOfThisPath, percentageAtEndOfThisPath);
                 drawPercentageThroughThisPath = std::clamp(drawPercentageThroughThisPath, 0., 1.);
 
                 (*iter)->drawPartialPath(gc.get(), sz, drawPercentageThroughThisPath, percentageThroughThisPath);
@@ -222,4 +254,15 @@ void SketchEffect::renderSketch(const SketchEffectSketch& sketch, wxImage& img, 
         }
         cumulativeLength += pathLength;
     }
+}
+
+void SketchEffect::updateSketchAssistBackground() const
+{
+    if (m_panel == nullptr || m_sketchAssistPanel == nullptr)
+        return;
+
+    wxString path(m_panel->FilePicker_SketchBackground->GetFileName().GetFullPath());
+    int opacity = m_panel->Slider_SketchBackgroundOpacity->GetValue();
+
+    m_sketchAssistPanel->UpdateSketchBackground(path, opacity);
 }

@@ -11,8 +11,49 @@ Issue Tracker is found here: www.github.com/smeighan/xLights/issues
 
 XLIGHTS/NUTCRACKER RELEASE NOTES
 ---------------------------------
+2022.09 April 29, 2022
+   -- enh (kevin) Allow for reverse of sketch-effect paths
+   -- enh (kevin) Sketch effect remembers background image and opacity
+   -- enh (kevin) Add value curve for Sketch effect motion-percentage
+   -- enh (kevin) Add closed paths with motion to Sketch effect
+   -- enh (dkulp) Add value curve for Sketch effect draw percentage
+   -- enh (scott) Add BBB16 Expansion
+   -- enh (scott) Preliminary support for Picture XY and Marquee LOR S5 Import
+   -- enh (dkulp) Add "Remove models from group" to Popup for SubModels in groups
+   -- bug (dkulp) Fix finding of images for Sketch effect on MacOS
+   -- bug (scott) Fix picture XY movement settings
+   -- bug (gil)   Fix DmxServo3D Import problems
+   -- bug (scott) Fix Falcon v3 pixel type decoding and prevent lockup of controllers
+   -- bug (scott) Fix Falcon v4 missing Default Brightness
+   -- bug (dkulp) Fix problems with exported House video if Hardware encoders are unavailable/busy
+   -- bug (keith) Fix test mode outputting double frames
+   -- bug (keith) Fix xCapture not ignoring non lighting data E1.31 packets.
+   -- bug (dkulp) Fix content scale in export House Videos on mixed Retina/non-Retina multi monitor setups
+   -- bug (robfallone) Fix stack traces in crash logs on Windows
+2022.08 April 12, 2022
+   -- enh (keith)    Better music/piano effect horizontal scaling
+   -- enh (scott)    Updates to effect search to use regex, other options
+   -- enh (kevin)    New "Sketch Effect"
+   -- enh (dkulp)    Allow ENTER/RETURN to end Polyline (request from FMM)
+   -- enh (dkulp)    Add "Remove Models from Group" to popup menu (request from FMM)
+   -- enh (keith)    New Controller Oriented test channel selection
+   -- enh (scott)    Attempt to auto-find singing faces files
+   -- enh (scott)    Several updates to Faces dialog
+   -- enh (keith)    Add tag color to model groups
+   -- enh (keith)    Check Sequence - flag invalide/missing background images
+   -- enh (keith)    Move some toolbar buttons around, reduce screen usage of toolbars
+   -- enh (keith)    State Effect  - Significantly increase maximum states supported
+   -- enh (keith)    Select all timing events using right click on a timing track
+   -- bug (keith)    Only show default brightness and gamma on controllers that support it
+   -- bug (scott)    Fix Hinkspix Serial issues, move DMX to end
+   -- bug (keith)    Fix crash in check sequence with mesh's with spaces in MTL files
+   -- bug (keith)    Some videos may not fully play due to strange way they calculate length
+   -- bug (keith)    Make backup of backup folder exclusion case insensitive
+   -- bug (keith)    State  Effect - fix not rendering on first dropped
+   -- bug (keith)    Node layout for custom model with multiple strings but no indiv start nodes incorrectly shows the string number
+   -- bug (dkulp)    Fix Image Model transparency issues, make sure not "dark" on layout panel
+   -- bug (keith)    Reset to default waveform on load of new audio after custom filter applied
 2022.07 March 28, 2022
-   -- enh (kevin)    Add Sketch Effect
    -- enh (gil)      Add Jaw Orientation property for the DMXSkull model
    -- enh (gil)      DMXSkull model changed so color error checking is only done when color channels are active
    -- enh (scott)    Added Effect Settings Search Panel.
