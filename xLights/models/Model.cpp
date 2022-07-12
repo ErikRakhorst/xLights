@@ -3718,12 +3718,9 @@ void Model::InitRenderBufferNodes(const std::string &type, const std::string &ca
             pcamera = xLightsApp::GetFrame()->viewpoint_mgr.GetNamedCamera3D(camera);
         }
 
-        if (pcamera != nullptr && camera != "2D")
-        {
+        if (pcamera != nullptr && camera != "2D") {
             GetModelScreenLocation().PrepareToDraw(true, false);
-        }
-        else
-        {
+        } else {
             GetModelScreenLocation().PrepareToDraw(false, false);
         }
 
@@ -5483,7 +5480,8 @@ void Model::DeleteHandle(int handle) {
 }
 
 int Model::GetStrandLength(int strand) const {
-    return GetNodeCount() / GetNumStrands();
+    int numStrands = std::max( 1, GetNumStrands() );
+    return GetNodeCount() / numStrands;
 }
 
 int Model::MapToNodeIndex(int strand, int node) const {
@@ -7188,7 +7186,8 @@ void Model::ImportXlightsModel(std::string const& filename, xLightsFrame* xlight
     if (EndsWith(filename, "gdtf"))
         return;
 
-    if (!wxString(filename).Lower().EndsWith("xmodel")) {
+    std::string lower = Lower(filename);
+    if (!EndsWith(lower, "xmodel")) {
         CustomModel* cm = dynamic_cast<CustomModel*>(this);
         if (cm != nullptr) {
             return cm->ImportLORModel(filename, xlights, min_x, max_x, min_y, max_y);
