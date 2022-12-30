@@ -46,6 +46,7 @@ class FPP : public BaseController
     std::string mode;
     std::string pixelControllerType;
     std::string panelSize;
+    std::string uuid = "";
 
     std::string proxy;
     std::set<std::string> proxies;
@@ -125,7 +126,7 @@ class FPP : public BaseController
 
 #ifndef DISCOVERYONLY
     wxJSONValue CreateModelMemoryMap(ModelManager* allmodels, int32_t startChan, int32_t endChannel);
-    static std::string CreateVirtualDisplayMap(ModelManager* allmodels, bool center0);
+    static std::string CreateVirtualDisplayMap(ModelManager* allmodels);
     static wxJSONValue CreateUniverseFile(const std::list<Controller*>& controllers, bool input, std::map<int, int> *rngs = nullptr);
     static wxJSONValue CreateUniverseFile(Controller* controller, bool input);
 #endif
@@ -181,7 +182,7 @@ private:
     std::string baseSeqName;
     FSEQFile *outputFile = nullptr;
 
-    void setupCurl();
+    void setupCurl(int timeout = 30000);
     CURL *curl = nullptr;
     std::string curlInputBuffer;
     

@@ -8,6 +8,10 @@
  * License: https://github.com/smeighan/xLights/blob/master/License.txt
  **************************************************************/
 
+#ifdef _DEBUG
+//#define VISUALSTUDIO_MEMORYLEAKDETECTION
+#endif
+
 //(*AppHeaders
 #include "xLightsMain.h"
 #include <wx/image.h>
@@ -47,21 +51,21 @@
 
 #ifdef _MSC_VER
 #ifdef _DEBUG
-    #pragma comment(lib, "wxbase31ud.lib")
-    #pragma comment(lib, "wxbase31ud_net.lib")
-    #pragma comment(lib, "wxmsw31ud_core.lib")
+    #pragma comment(lib, "wxbase" WXWIDGETS_VERSION "ud.lib")
+    #pragma comment(lib, "wxbase" WXWIDGETS_VERSION "ud_net.lib")
+    #pragma comment(lib, "wxmsw" WXWIDGETS_VERSION "ud_core.lib")
     #pragma comment(lib, "wxscintillad.lib")
     #pragma comment(lib, "wxregexud.lib")
-    #pragma comment(lib, "wxbase31ud_xml.lib")
+    #pragma comment(lib, "wxbase" WXWIDGETS_VERSION "ud_xml.lib")
     #pragma comment(lib, "wxtiffd.lib")
     #pragma comment(lib, "wxjpegd.lib")
     #pragma comment(lib, "wxpngd.lib")
-    #pragma comment(lib, "wxmsw31ud_aui.lib")
-    #pragma comment(lib, "wxmsw31ud_gl.lib")
+    #pragma comment(lib, "wxmsw" WXWIDGETS_VERSION "ud_aui.lib")
+    #pragma comment(lib, "wxmsw" WXWIDGETS_VERSION "ud_gl.lib")
     #pragma comment(lib, "wxzlibd.lib")
-    #pragma comment(lib, "wxmsw31ud_qa.lib")
-    #pragma comment(lib, "wxmsw31ud_html.lib")
-    #pragma comment(lib, "wxmsw31ud_propgrid.lib")
+    #pragma comment(lib, "wxmsw" WXWIDGETS_VERSION "ud_qa.lib")
+    #pragma comment(lib, "wxmsw" WXWIDGETS_VERSION "ud_html.lib")
+    #pragma comment(lib, "wxmsw" WXWIDGETS_VERSION "ud_propgrid.lib")
     #pragma comment(lib, "wxexpatd.lib")
     #pragma comment(lib, "log4cppLIBd.lib")
     #pragma comment(lib, "msvcprtd.lib")
@@ -69,21 +73,21 @@
     #pragma comment(lib, "libzstdd_static_VS.lib")
     #pragma comment(lib, "xlsxwriterd.lib")
 #else
-    #pragma comment(lib, "wxbase31u.lib")
-    #pragma comment(lib, "wxbase31u_net.lib")
-    #pragma comment(lib, "wxmsw31u_core.lib")
+    #pragma comment(lib, "wxbase" WXWIDGETS_VERSION "u.lib")
+    #pragma comment(lib, "wxbase" WXWIDGETS_VERSION "u_net.lib")
+    #pragma comment(lib, "wxmsw" WXWIDGETS_VERSION "u_core.lib")
     #pragma comment(lib, "wxscintilla.lib")
     #pragma comment(lib, "wxregexu.lib")
-    #pragma comment(lib, "wxbase31u_xml.lib")
+    #pragma comment(lib, "wxbase" WXWIDGETS_VERSION "u_xml.lib")
     #pragma comment(lib, "wxtiff.lib")
     #pragma comment(lib, "wxjpeg.lib")
     #pragma comment(lib, "wxpng.lib")
-    #pragma comment(lib, "wxmsw31u_aui.lib")
-    #pragma comment(lib, "wxmsw31u_gl.lib")
+    #pragma comment(lib, "wxmsw" WXWIDGETS_VERSION "u_aui.lib")
+    #pragma comment(lib, "wxmsw" WXWIDGETS_VERSION "u_gl.lib")
     #pragma comment(lib, "wxzlib.lib")
-    #pragma comment(lib, "wxmsw31u_qa.lib")
-    #pragma comment(lib, "wxmsw31u_html.lib")
-    #pragma comment(lib, "wxmsw31u_propgrid.lib")
+    #pragma comment(lib, "wxmsw" WXWIDGETS_VERSION "u_qa.lib")
+    #pragma comment(lib, "wxmsw" WXWIDGETS_VERSION "u_html.lib")
+    #pragma comment(lib, "wxmsw" WXWIDGETS_VERSION "u_propgrid.lib")
     #pragma comment(lib, "wxexpat.lib")
     #pragma comment(lib, "log4cppLIB.lib")
     #pragma comment(lib, "msvcprt.lib")
@@ -127,9 +131,7 @@ void InitialiseLogging(bool fromMain)
 {
     static bool loggingInitialised = false;
 
-    if (!loggingInitialised)
-    {
-
+    if (!loggingInitialised) {
 #ifdef __WXMSW__
         std::string initFileName = "xlights.windows.properties";
 #endif
@@ -160,52 +162,55 @@ void InitialiseLogging(bool fromMain)
         }
 #endif
 
-        if (!FileExists(initFileName))
-        {
+        if (!FileExists(initFileName)) {
 #ifdef _MSC_VER
             // the app is not initialized so GUI is not available and no event loop.
             wxMessageBox(initFileName + " not found in " + wxGetCwd() + ". Logging disabled.");
 #endif
-        }
-        else
-        {
-            try
-            {
+        } else {
+            try {
                 log4cpp::PropertyConfigurator::configure(initFileName);
-				static log4cpp::Category &logger_base = log4cpp::Category::getInstance(std::string("log_base"));
+                static log4cpp::Category& logger_base = log4cpp::Category::getInstance(std::string("log_base"));
 
                 wxDateTime now = wxDateTime::Now();
                 int millis = wxGetUTCTimeMillis().GetLo() % 1000;
                 wxString ts = wxString::Format("%04d-%02d-%02d_%02d-%02d-%02d-%03d", now.GetYear(), now.GetMonth(), now.GetDay(), now.GetHour(), now.GetMinute(), now.GetSecond(), millis);
-                logger_base.info("Start Time: %s.", (const char *)ts.c_str());
+                logger_base.info("Start Time: %s.", (const char*)ts.c_str());
 
-				logger_base.info("Log4CPP config read from %s.", (const char *)initFileName.c_str());
+                logger_base.info("Log4CPP config read from %s.", (const char*)initFileName.c_str());
+                logger_base.info("Current working directory %s.", (const char*)wxGetCwd().c_str());
 
-				auto categories = log4cpp::Category::getCurrentCategories();
+                auto categories = log4cpp::Category::getCurrentCategories();
 
-				for (auto it = categories->begin(); it != categories->end(); ++it)
-				{
-					std::string levels = "";
+                for (auto it = categories->begin(); it != categories->end(); ++it) {
+                    std::string levels = "";
 
-					if ((*it)->isAlertEnabled()) levels += "ALERT ";
-					if ((*it)->isCritEnabled()) levels += "CRIT ";
-					if ((*it)->isDebugEnabled()) levels += "DEBUG ";
-					if ((*it)->isEmergEnabled()) levels += "EMERG ";
-					if ((*it)->isErrorEnabled()) levels += "ERROR ";
-					if ((*it)->isFatalEnabled()) levels += "FATAL ";
-					if ((*it)->isInfoEnabled()) levels += "INFO ";
-					if ((*it)->isNoticeEnabled()) levels += "NOTICE ";
-					if ((*it)->isWarnEnabled()) levels += "WARN ";
+                    if ((*it)->isAlertEnabled())
+                        levels += "ALERT ";
+                    if ((*it)->isCritEnabled())
+                        levels += "CRIT ";
+                    if ((*it)->isDebugEnabled())
+                        levels += "DEBUG ";
+                    if ((*it)->isEmergEnabled())
+                        levels += "EMERG ";
+                    if ((*it)->isErrorEnabled())
+                        levels += "ERROR ";
+                    if ((*it)->isFatalEnabled())
+                        levels += "FATAL ";
+                    if ((*it)->isInfoEnabled())
+                        levels += "INFO ";
+                    if ((*it)->isNoticeEnabled())
+                        levels += "NOTICE ";
+                    if ((*it)->isWarnEnabled())
+                        levels += "WARN ";
 
-					logger_base.info("    %s : %s", (const char *)(*it)->getName().c_str(), (const char *)levels.c_str());
-				}
+                    logger_base.info("    %s : %s", (const char*)(*it)->getName().c_str(), (const char*)levels.c_str());
+                }
                 delete categories;
-			}
-            catch (log4cpp::ConfigureFailure& e) {
+            } catch (log4cpp::ConfigureFailure& e) {
                 // ignore config failure ... but logging wont work
                 printf("Log issue:  %s\n", e.what());
-            }
-            catch (const std::exception& ex) {
+            } catch (const std::exception& ex) {
                 printf("Log issue: %s\n", ex.what());
             }
         }
@@ -361,7 +366,7 @@ wxIMPLEMENT_APP_NO_MAIN(xLightsApp);
 #endif
 
 xLightsApp::xLightsApp() :
-    xlGLBaseApp("xLights")
+    xLightsAppBaseClass("xLights")
 {
 }
 
@@ -400,20 +405,25 @@ void xLightsApp::MacOpenFiles(const wxArrayString &fileNames) {
         showDir = wxPathOnly(showDir);
         if (showDir == old) showDir = "";
     }
-    if (showDir != "" && showDir != __frame->showDirectory) {
-        if (!ObtainAccessToURL(showDir)) {
-            wxDirDialog dlg(__frame, "Select Show Directory", showDir,  wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
-            if (dlg.ShowModal() == wxID_OK) {
-                showDir = dlg.GetPath();
-            }
-            if (!ObtainAccessToURL(showDir)) {
-                return;
-            }
-        }
-        __frame->SetDir(showDir, false);
-    }
+    
     if (__frame) {
-        __frame->OpenSequence(fileName, nullptr);
+        xLightsFrame* frame = __frame;
+        frame->CallAfter([showDir, fileName, frame] {
+            if (showDir != "" && showDir != frame->showDirectory) {
+                wxString nsd = showDir;
+                if (!ObtainAccessToURL(nsd)) {
+                    wxDirDialog dlg(frame, "Select Show Directory", nsd,  wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
+                    if (dlg.ShowModal() == wxID_OK) {
+                        nsd = dlg.GetPath();
+                    }
+                    if (!ObtainAccessToURL(nsd)) {
+                        return;
+                    }
+                }
+                frame->SetDir(nsd, false);
+            }
+            frame->OpenSequence(fileName, nullptr);
+        });
     } else {
         logger_base.info("       No xLightsFrame");
     }
@@ -445,7 +455,7 @@ bool xLightsApp::OnInit()
 	_CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_DEBUG);
 	_CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_DEBUG);
 #ifdef VISUALSTUDIO_MEMORYLEAKDETECTION
-    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_CHECK_ALWAYS_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
 #endif
 

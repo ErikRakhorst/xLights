@@ -263,11 +263,19 @@ ShaderConfig* ShaderEffect::ParseShader(const std::string& filename, SequenceEle
     f.Close();
 
     if (code == "") return nullptr;
+    
+    if (code[0] == '{' && code[1] == '"') {
+        wxJSONReader reader;
+        wxJSONValue root;
+        reader.Parse(code, &root);
+        if (root.HasMember("rawFragmentSource")) {
+            code = root["rawFragmentSource"].AsString();
+            if (code == "") return nullptr;
+        }
+    }
 
     wxRegEx re("\\/\\*(.*?)\\*\\/", wxRE_ADVANCED);
-
     if (!re.Matches(code)) return nullptr;
-
     return new ShaderConfig(filename, code, re.GetMatch(code, 1), sequenceElements);
 }
 
@@ -279,11 +287,16 @@ void ShaderEffect::SetDefaultParameters()
     }
 
     fp->BitmapButton_Shader_Speed->SetActive(false);
+    fp->BitmapButton_Shader_Offset_X->SetActive(false);
+    fp->BitmapButton_Shader_Offset_Y->SetActive(false);
+    fp->BitmapButton_Shader_Zoom->SetActive(false);
 
     SetSliderValue(fp->Slider_Shader_LeadIn, 0);
     SetSliderValue(fp->Slider_Shader_Speed, 100);
     fp->FilePickerCtrl1->SetFileName(wxFileName());
-    
+    SetSliderValue(fp->Slider_Shader_Offset_X, 0);
+    SetSliderValue(fp->Slider_Shader_Offset_Y, 0);
+    SetSliderValue(fp->Slider_Shader_Zoom, 0);
     
     if (fp->_shaderConfig != nullptr) {
         for (const auto& it : fp->_shaderConfig->GetParms()) {
@@ -347,7 +360,7 @@ void ShaderEffect::adjustSettings(const std::string& version, Effect* effect, bo
             it.first != "E_TEXTCTRL_Shader_Offset_X" &&
             it.first != "E_TEXTCTRL_Shader_Offset_Y" &&
             it.first != "E_TEXTCTRL_Shader_Zoom" &&
-            it.first != "E_ID_VALUECURVE_Shader_Offset_X"
+            it.first != "E_VALUECURVE_Shader_Offset_X"
            ) {
             if (StartsWith(it.first, "E_") && !Contains(it.first, "SHADERXYZZY")) {
                 std::string undecorated = AfterFirst(it.first, '_');
@@ -975,7 +988,7 @@ bool ShaderEffect::SetGLContext(ShaderRenderCache *cache) {
 }
 
 
-void ShaderEffect::Render(Effect* eff, SettingsMap& SettingsMap, RenderBuffer& buffer)
+void ShaderEffect::Render(Effect* eff, const SettingsMap& SettingsMap, RenderBuffer& buffer)
 {
     static log4cpp::Category& logger_base = log4cpp::Category::getInstance(std::string("log_base"));
 
@@ -1052,12 +1065,13 @@ void ShaderEffect::Render(Effect* eff, SettingsMap& SettingsMap, RenderBuffer& b
         _timeMS += buffer.frameTimeInMs * timeRate;
     }
 
+    ShaderRenderCache::ShaderInfo *si = cache->s_shaderInfo;
     // if there is no config then we should paint it red ... just like the video effect
     if (_shaderConfig == nullptr) {
         setRenderBufferAll(buffer, xlRED);
         UnsetGLContext(cache);
         return;
-    } else if (programId == 0u) {
+    } else if (programId == 0u || si == nullptr) {
         setRenderBufferAll(buffer, xlYELLOW);
         UnsetGLContext(cache);
         return;
@@ -1113,7 +1127,6 @@ void ShaderEffect::Render(Effect* eff, SettingsMap& SettingsMap, RenderBuffer& b
     }
 
     int colourIndex = 0;
-    ShaderRenderCache::ShaderInfo *si = cache->s_shaderInfo;
     if (!si->SetUniform2f("RENDERSIZE", buffer.BufferWi, buffer.BufferHt)) {
         if (buffer.curPeriod == buffer.curEffStartPer && _shaderConfig->HasRendersize()) {
             logger_base.warn("Unable to bind to RENDERSIZE\n%s", (const char*)_shaderConfig->GetCode().c_str());
@@ -1346,7 +1359,7 @@ unsigned ShaderEffect::programIdForShaderCode(ShaderConfig* cfg, ShaderRenderCac
     }
 
     lock.unlock();
-    unsigned programId = OpenGLShaders::compile(vsSrc, fragmentShaderSrc);
+    unsigned programId = OpenGLShaders::compile(vsSrc, fragmentShaderSrc, cfg->GetFilename());
     if (programId == 0u) {
         lock.lock();
         logger_base.error("ShaderEffect::programIdForShaderCode() - failed to compile shader program %s", (const char *)cfg->GetFilename().c_str());

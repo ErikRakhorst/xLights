@@ -10,6 +10,7 @@ Echo VS Preview Detected
 GOTO Start
 
 :Community
+IF NOT EXIST "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\amd64" GOTO Start
 set PATH=C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\amd64;%PATH%
 Echo VS Community Detected
 :Start
@@ -18,7 +19,14 @@ cd ..
 cd ..
 cd ..
 
-git clone --recurse-submodules -b xlights_2022.11 https://github.com/xLightsSequencer/wxWidgets wxWidgets
+if not exist wxWidgets goto clone
+
+rem backup existing wxWidgets to wxWidgets.old. If there is already a wxWidgets.old then it is deleted
+if exist wxWidgets.old echo y | rmdir /s wxWidgets.old
+ren wxWidgets wxWidgets.old
+
+:clone
+git clone --recurse-submodules -b master https://github.com/xLightsSequencer/wxWidgets wxWidgets
 
 cd wxWidgets
 msbuild.exe /m .\build\msw\wx_vc17.sln /p:Configuration="Debug" /p:Platform="x64"

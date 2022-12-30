@@ -133,8 +133,9 @@ public:
     bool AreAllSelectedEffectsOnTheSameElement() const;
     void ApplyEffectSettingToSelected(const std::string& effectName, const std::string id, const std::string value, ValueCurve* vc, const std::string& vcid);
     void ApplyButtonPressToSelected(const std::string& effectName, const std::string id);
-    void RemapSelectedDMXEffectValues(const std::vector<std::pair<int, int>>& pairs);
+    void RemapSelectedDMXEffectValues(const std::vector<std::tuple<int, int, float, int>>& dmxmappings);
     void ConvertSelectedEffectsTo(const std::string& effectName);
+    void DuplicateSelectedEffects();
 
     bool HandleACKey(wxChar key, bool shift = false);
     bool IsACActive();
@@ -363,6 +364,7 @@ private:
     static const long ID_GRID_MNU_ALIGN_START_TIMES_SHIFT;
     static const long ID_GRID_MNU_ALIGN_END_TIMES_SHIFT;
     static const long ID_GRID_MNU_SPLIT_EFFECT;
+    static const long ID_GRID_MNU_DUPLICATE_EFFECT;
     EventPlayEffectArgs* playArgs = nullptr;
 
     const SequenceData *seqData = nullptr;

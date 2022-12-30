@@ -64,7 +64,7 @@ Model* ModelGroup::GetFirstModel() const
 }
 
 // Gets a list of models in the group flattening out any groups and optionally removing any duplicates - submodels will be included if they are in the groups
-std::list<Model*> ModelGroup::GetFlatModels(bool removeDuplicates) const
+std::list<Model*> ModelGroup::GetFlatModels(bool removeDuplicates, bool activeOnly) const
 {
     std::list<Model*> res;
 
@@ -74,14 +74,18 @@ std::list<Model*> ModelGroup::GetFlatModels(bool removeDuplicates) const
             if (m->GetDisplayAs() == "ModelGroup") {
                 auto mg = dynamic_cast<ModelGroup*>(m);
                 if (mg != nullptr) {
-                    for (const auto& it : mg->GetFlatModels(removeDuplicates)) {
+                    for (const auto& it : mg->GetFlatModels(removeDuplicates, activeOnly)) {
                         if (!removeDuplicates || (std::find(begin(res), end(res), it) == end(res))) {
-                            res.push_back(it);
+                            if (!activeOnly || m->IsActive()) {
+                                res.push_back(it);
+                            }
                         }
                     }
                 }
             } else if (!removeDuplicates || (std::find(begin(res), end(res), m) == end(res))) {
-                res.push_back(m);
+                if (!activeOnly || m->IsActive()) {
+                    res.push_back(m);
+                }
             }
         }
     }
@@ -90,8 +94,8 @@ std::list<Model*> ModelGroup::GetFlatModels(bool removeDuplicates) const
 
 bool ModelGroup::ContainsModelGroup(ModelGroup* mg)
 {
-    std::list<Model*> visited;
-    visited.push_back(this);
+    std::set<Model*> visited;
+    visited.insert(this);
 
     bool found = false;
     for (auto it = models.begin(); !found && it != models.end(); ++it)
@@ -119,9 +123,9 @@ bool ModelGroup::ContainsModelGroup(ModelGroup* mg)
     return found;
 }
 
-bool ModelGroup::ContainsModelGroup(ModelGroup* mg, std::list<Model*>& visited)
+bool ModelGroup::ContainsModelGroup(ModelGroup* mg, std::set<Model*>& visited)
 {
-    visited.push_back(this);
+    visited.insert(this);
 
     bool found = false;
     for (auto it = models.begin(); !found && it != models.end(); ++it)
@@ -134,7 +138,7 @@ bool ModelGroup::ContainsModelGroup(ModelGroup* mg, std::list<Model*>& visited)
             }
             else
             {
-                if (std::find(visited.begin(), visited.end(), *it) == visited.end())
+                if (visited.find(*it) == visited.end())
                 {
                     found |= dynamic_cast<ModelGroup*>(*it)->ContainsModelGroup(mg, visited);
                 }
@@ -160,9 +164,34 @@ bool ModelGroup::DirectlyContainsModel(Model* m) const
     return false;
 }
 
-bool ModelGroup::DirectlyContainsModel(std::string const& m ) const
+bool ModelGroup::DirectlyContainsModel(std::string const& m) const
 {
     return std::find(modelNames.begin(), modelNames.end(), m) != modelNames.end();
+}
+
+bool ModelGroup::ContainsModelOrSubmodel(Model* m) const
+{
+    wxASSERT(m->GetDisplayAs() != "ModelGroup");
+
+    std::list<const Model*> visited;
+    visited.push_back(this);
+
+    bool found = false;
+    for (auto it = models.begin(); !found && it != models.end(); ++it) {
+        if ((*it)->GetDisplayAs() == "ModelGroup") {
+            if (std::find(visited.begin(), visited.end(), *it) == visited.end()) {
+                found |= dynamic_cast<ModelGroup*>(*it)->ContainsModelOrSubmodel(m, visited);
+            } else {
+                // already seen this group so dont follow
+            }
+        } else {
+            if (StartsWith((*it)->GetFullName(), m->GetName())) {
+                found = true;
+            }
+        }
+    }
+
+    return found;
 }
 
 bool ModelGroup::ContainsModel(Model* m) const
@@ -230,6 +259,31 @@ bool ModelGroup::ContainsModel(Model* m, std::list<const Model*>& visited) const
     return found;
 }
 
+bool ModelGroup::ContainsModelOrSubmodel(Model* m, std::list<const Model*>& visited) const
+{
+    visited.push_back(this);
+
+    bool found = false;
+    for (const auto& it : models) {
+        if (it->GetDisplayAs() == "ModelGroup") {
+            if (std::find(visited.begin(), visited.end(), it) == visited.end()) {
+                found |= dynamic_cast<ModelGroup*>(it)->ContainsModelOrSubmodel(m, visited);
+                if (found)
+                    break;
+            } else {
+                // already seen this group so dont follow
+            }
+        } else {
+            if (StartsWith(it->GetFullName(), m->GetName())) {
+                found = true;
+                break;
+            }
+        }
+    }
+
+    return found;
+}
+
 // Returns true if group only contains model and submodels of that model
 bool ModelGroup::OnlyContainsModel(const std::string& name) const
 {
@@ -250,7 +304,7 @@ std::string ModelGroup::SerialiseModelGroup(const std::string& forModel) const
     auto mns = wxSplit(new_doc.GetRoot()->GetAttribute("models"), ',');
     for (auto& it : mns) {
         if(!it.StartsWith(forModel)) continue;
-        if (nmns != "") nmns += ",";
+        if (!nmns.empty()) nmns += ",";
         it.Replace(forModel + "/", "EXPORTEDMODEL/");
         nmns += it;
     }
@@ -295,59 +349,52 @@ const std::vector<std::string> &ModelGroup::GetBufferStyles() const {
 
 bool ModelGroup::AllModelsExist(wxXmlNode* node, const ModelManager& models)
 {
-    wxArrayString mn = wxSplit(node->GetAttribute("models"), ',');
+    std::string nms = node->GetAttribute("models").ToStdString();
+    std::vector<std::string> mn;
+    Split(nms, ',', mn, true);
     for (auto& it : mn) {
-        if (it != "")
-        {
-            Model* c = models.GetModel(it.Trim(true).Trim(false).ToStdString());
+        if (!it.empty()) {
+            Model* c = models.GetModel(it);
             if (c == nullptr) return false;
         }
     }
     return true;
 }
 
-bool ModelGroup::RemoveNonExistentModels(wxXmlNode* node, const std::list<std::string>& allmodels)
+bool ModelGroup::RemoveNonExistentModels(wxXmlNode* node, const std::set<std::string>& allmodels)
 {
     bool changed = false;
 
     std::string models;
     std::string modelsRemoved;
 
-    wxString name = node->GetAttribute("name", "").Trim(false).Trim(true);
-    wxArrayString mn = wxSplit(node->GetAttribute("models", ""), ',');
-
-    for (auto& it : mn) {
-        auto mm = it.Trim(true).Trim(false);
-        if (mm.Contains("/"))
-        {
-            auto smm = wxSplit(mm, '/');
+    std::string nms = node->GetAttribute("models", "").ToStdString();
+    std::vector<std::string> mn;
+    Split(nms, ',', mn, true);
+    for (auto& mm : mn) {
+        if (mm.find_first_of('/') != std::string::npos) {
+            std::vector<std::string> smm;
+            Split(mm, '/', smm, true);
             mm = "";
-            for (auto& it2 : smm)
-            {
-                if (mm != "") mm += "/";
-                mm += it2.Trim(true).Trim(false);
+            for (auto& it2 : smm) {
+                if (!mm.empty()) mm += "/";
+                mm += it2;
             }
         }
-        if (std::find(allmodels.begin(), allmodels.end(), mm) == allmodels.end())
-        {
-            if (modelsRemoved != "") modelsRemoved += ", ";
+        if (allmodels.find(mm) == allmodels.end()) {
+            if (!modelsRemoved.empty()) modelsRemoved += ", ";
             modelsRemoved += mm;
             changed = true;
-        }
-        else
-        {
-            if (models != "") models += ",";
+        } else {
+            if (!models.empty()) models += ",";
             models += mm;
         }
     }
 
-    if (changed && modelsRemoved != "") {
+    if (changed && !modelsRemoved.empty()) {
         node->DeleteAttribute("models");
         node->AddAttribute("models", models);
-
-        // I have removed the warn code ... mainly because there is really not anything a user can or should do so why tell them
     }
-
     return changed;
 }
 
@@ -368,11 +415,11 @@ ModelGroup::ModelGroup(wxXmlNode* node, const ModelManager& m, int w, int h, con
     screenLocation.previewH = h;
 
     // We have to fix the model name before we reset otherwise it will fail
-    auto mn = wxSplit(ModelXml->GetAttribute("models"), ',');
+    auto mn = Split(ModelXml->GetAttribute("models").ToStdString(), ',');
     std::string nmns;
     for (auto& it : mn) {
-        if (nmns != "") nmns += ",";
-        it.Replace("EXPORTEDMODEL", mname);
+        if (!nmns.empty()) nmns += ",";
+        Replace(it, "EXPORTEDMODEL", mname);
         nmns += it;
     }
     ModelXml->DeleteAttribute("models");
@@ -395,7 +442,7 @@ void LoadRenderBufferNodes(Model *m, const std::string &type, const std::string 
     {
         ModelGroup *g = dynamic_cast<ModelGroup*>(m);
         if (g != nullptr) {
-            for (const auto& it : g->Models()) {
+            for (const auto& it : g->ActiveModels()) {
                 LoadRenderBufferNodes(it, type, camera, newNodes, bufferWi, bufferHi);
             }
         }
@@ -422,6 +469,11 @@ int ModelGroup::GetXCentreOffset() const
 int ModelGroup::GetYCentreOffset() const
 {
     return wxAtoi(ModelXml->GetAttribute("YCentreOffset", "0"));
+}
+
+std::string ModelGroup::GetDefaultCamera() const
+{
+    return ModelXml->GetAttribute("DefaultCamera", "2D");
 }
 
 bool ModelGroup::Reset(bool zeroBased) {
@@ -451,28 +503,37 @@ bool ModelGroup::Reset(bool zeroBased) {
     }
     Nodes.clear();
     models.clear();
+    activeModels.clear();
     modelNames.clear();
     changeCount = 0;
-    wxArrayString mn = wxSplit(ModelXml->GetAttribute("models"), ',');
+    auto mn = Split(ModelXml->GetAttribute("models").ToStdString(), ',', true);
     int nc = 0;
+    bool didnotexist = false;
     for (int x = 0; x < mn.size(); x++) {
-        Model *c = modelManager.GetModel(mn[x].Trim(true).Trim(false).ToStdString());
+        Model *c = modelManager.GetModel(mn[x]);
         if (c != nullptr) {
             modelNames.push_back(c->GetFullName());
             models.push_back(c);
+            if (c->IsActive()) {
+                activeModels.push_back(c);
+            }
             changeCount += c->GetChangeCount();
             nc += c->GetNodeCount();
         }
-        else if (mn[x] == "")
+        else if (mn[x].empty())
         {
             // silently ignore blank models
         }
         else
         {
-            // model does not exist yet ... but it may soon
-            return false;
+            // model does not exist yet ... but it may soon ... so dont forget the model
+            modelNames.push_back(mn[x]);
+            didnotexist = true;
         }
     }
+
+    if (didnotexist)
+        return false;
 
     if (nc) {
         Nodes.reserve(nc);
@@ -620,14 +681,20 @@ bool ModelGroup::Reset(bool zeroBased) {
 void ModelGroup::ResetModels()
 {
     models.clear();
-    wxArrayString mn = wxSplit(ModelXml->GetAttribute("models"), ',');
-    for (int x = 0; x < mn.size(); x++) {
-        Model *c = modelManager.GetModel(mn[x].Trim(true).Trim(false).ToStdString());
+    activeModels.clear();
+    std::string modelString = ModelXml->GetAttribute("models");
+    std::vector<std::string> mn;
+    Split(modelString, ',', mn, true);
+    for (auto &m : mn) {
+        Model *c = modelManager.GetModel(m);
         if (c != nullptr && c != this) {
             if (c->GetDisplayAs() == "ModelGroup") {
                 static_cast<ModelGroup*>(c)->ResetModels();
             }
             models.push_back(c);
+            if (c->IsActive()) {
+                activeModels.push_back(c);
+            }
         }
     }
 }
@@ -840,7 +907,7 @@ void ModelGroup::GetBufferSize(const std::string &tp, const std::string &camera,
             totWid += m->GetDefaultBufferWi();
             totHi += m->GetDefaultBufferHt();
             maxStrandLen = std::max(maxStrandLen, bh);
-        } else if (m != nullptr) {
+        } else if (m != nullptr && m->IsActive()) {
             models++;
             strands += m->GetNumStrands();
             total += m->GetNodeCount();
@@ -967,7 +1034,7 @@ void ModelGroup::InitRenderBufferNodes(const std::string& tp,
     if (type == HORIZ_PER_MODEL) {
         for (const auto& it : modelNames) {
             Model* m = modelManager[it];
-            if (m != nullptr) {
+            if (m != nullptr && m->IsActive()) {
                 int start = Nodes.size();
                 int x, y;
                 m->InitRenderBufferNodes("Default", "2D", "None", Nodes, x, y);
@@ -991,7 +1058,7 @@ void ModelGroup::InitRenderBufferNodes(const std::string& tp,
         int modelX = 0;
         for (const auto& it : modelNames) {
             Model* m = modelManager[it];
-            if (m != nullptr) {
+            if (m != nullptr && m->IsActive()) {
                 int start = Nodes.size();
                 int x, y;
                 m->InitRenderBufferNodes("Default", "2D", "None", Nodes, x, y);
@@ -1013,7 +1080,7 @@ void ModelGroup::InitRenderBufferNodes(const std::string& tp,
         int modelY = 0;
         for (const auto& it : modelNames) {
             Model* m = modelManager[it];
-            if (m != nullptr) {
+            if (m != nullptr && m->IsActive()) {
                 int start = Nodes.size();
                 int x, y;
                 m->InitRenderBufferNodes("Default", "2D", "None", Nodes, x, y);
@@ -1042,7 +1109,7 @@ void ModelGroup::InitRenderBufferNodes(const std::string& tp,
             int modBufferWi = BufferWi / numOfModels;
             for (const auto& it : modelNames) {
                 Model* m = modelManager[it];
-                if (m != nullptr) {
+                if (m != nullptr && m->IsActive()) {
                     int start = Nodes.size();
                     int x, y;
                     m->InitRenderBufferNodes("Default", "2D", "None", Nodes, x, y);
@@ -1070,7 +1137,7 @@ void ModelGroup::InitRenderBufferNodes(const std::string& tp,
             int modBufferHt = BufferHt / numOfModels;
             for (const auto& it : modelNames) {
                 Model* m = modelManager[it];
-                if (m != nullptr) {
+                if (m != nullptr && m->IsActive()) {
                     int start = Nodes.size();
                     int x, y;
                     m->InitRenderBufferNodes("Default", "2D", "None", Nodes, x, y);
@@ -1089,7 +1156,7 @@ void ModelGroup::InitRenderBufferNodes(const std::string& tp,
     } else if (type == VERT_PER_MODEL) {
         for (const auto& it : modelNames) {
             Model* m = modelManager[it];
-            if (m != nullptr) {
+            if (m != nullptr && m->IsActive()) {
                 int start = Nodes.size();
                 int x, y;
                 m->InitRenderBufferNodes("Default", "2D", "None", Nodes, x, y);
@@ -1114,7 +1181,7 @@ void ModelGroup::InitRenderBufferNodes(const std::string& tp,
         BufferHt = 1;
         for (const auto& it : modelNames) {
             Model* m = modelManager[it];
-            if (m != nullptr) {
+            if (m != nullptr && m->IsActive()) {
                 int start = Nodes.size();
                 int x = 0;
                 int y = 0;
@@ -1188,7 +1255,7 @@ void ModelGroup::InitRenderBufferNodes(const std::string& tp,
                 } else {
                     curS += bh;
                 }
-            } else if (m != nullptr) {
+            } else if (m != nullptr && m->IsActive()) {
                 int bw, bh;
                 bw = bh = 0;
                 m->InitRenderBufferNodes(horiz ? "Horizontal Per Strand" : "Vertical Per Strand", "2D", "None", Nodes, bw, bh);
@@ -1207,7 +1274,7 @@ void ModelGroup::InitRenderBufferNodes(const std::string& tp,
                     curS += bh;
                 }
             }
-            if (m != nullptr) {
+            if (m != nullptr && m->IsActive()) {
                 int endBM = Nodes.size();
                 if ((endBM - startBM) != m->GetNodeCount()) {
                     static log4cpp::Category& logger_base = log4cpp::Category::getInstance(std::string("log_base"));
@@ -1222,9 +1289,10 @@ void ModelGroup::InitRenderBufferNodes(const std::string& tp,
         BufferHt = 1;
         BufferWi = 0;
         if (deep) {
-            for (const auto& it : GetFlatModels(false)) {
+            for (const auto& it : GetFlatModels(false, true)) {
                 Model* m = it;
                 wxASSERT(m != nullptr);
+                if (!m->IsActive()) continue;
                 int start = Nodes.size();
                 int x, y;
                 m->InitRenderBufferNodes("Single Line", "2D", "None", Nodes, x, y);
@@ -1240,7 +1308,7 @@ void ModelGroup::InitRenderBufferNodes(const std::string& tp,
         } else {
             for (const auto& it : modelNames) {
                 Model* m = modelManager[it];
-                if (m != nullptr) {
+                if (m != nullptr && m->IsActive()) {
                     int start = Nodes.size();
                     int x, y;
                     m->InitRenderBufferNodes("Single Line", "2D", "None", Nodes, x, y);
@@ -1266,7 +1334,7 @@ void ModelGroup::InitRenderBufferNodes(const std::string& tp,
         GetBufferSize(type, "2D", "None", BufferWi, BufferHt);
         for (const auto& it : modelNames) {
             Model* m = modelManager[it];
-            if (m != nullptr) {
+            if (m != nullptr && m->IsActive()) {
                 int start = Nodes.size();
                 int bw, bh;
                 m->InitRenderBufferNodes("Default", "2D", "None", Nodes, bw, bh);

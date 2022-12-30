@@ -200,8 +200,11 @@ std::list<std::string> ControllerCaps::GetModels(const std::string& type, const 
                 if (type == CONTROLLER_ETHERNET && it3->SupportsEthernetInputProtols()) {
                     models.push_back(it.first);
                     break;
+                } else if (type == CONTROLLER_SERIAL && it3->SupportsSerialInputProtols()) {
+                    models.push_back(it.first);
+                    break;
                 }
-                else if (type == CONTROLLER_SERIAL && it3->SupportsSerialInputProtols()) {
+                else if (type == CONTROLLER_ETHERNET && it3->IsPlayerOnly()) {
                     models.push_back(it.first);
                     break;
                 }
@@ -247,7 +250,7 @@ ControllerCaps* ControllerCaps::GetControllerConfig(const Controller* const cont
 
 ControllerCaps* ControllerCaps::GetControllerConfig(const std::string& vendor, const std::string& model, const std::string& variant) {
     LoadControllers();
-    std::list<std::string> versions;
+    //std::list<std::string> versions;
 
     auto v = __controllers.find(vendor);
     if (v != __controllers.end()) {
@@ -275,13 +278,28 @@ ControllerCaps* ControllerCaps::GetControllerConfigByID(const std::string& ID) {
     }
     return nullptr;
 }
+
+ControllerCaps* ControllerCaps::GetControllerConfigByModel( const std::string& model, const std::string& variant)
+{
+    LoadControllers();
+    // look for controller in other "vendors" if branding changes
+    for (auto [name, cap] : __controllers) {
+        auto con = cap.find(model);
+        if (con != cap.end()) {
+            auto f = FindVariant(con->second, variant);
+            if (f)
+                return f;
+        }
+    }
+    return nullptr;
+}
 #pragma endregion
 
 #pragma region Getters and Setters
 
 bool ControllerCaps::SupportsUpload() const {
 
-    return DoesXmlNodeExist(_config, "SupportsUpload") || 
+    return DoesXmlNodeExist(_config, "SupportsUpload") ||
            DoesXmlNodeExist(_config, "SupportsInputOnlyUpload");
 }
 
@@ -362,6 +380,11 @@ bool ControllerCaps::AllInputUniversesMustBeSameSize() const {
     return DoesXmlNodeExist(_config, "AllInputUniversesMustBeSameSize");
 }
 
+bool ControllerCaps::AllInputUniversesMustBe510() const
+{
+    return DoesXmlNodeExist(_config, "AllInputUniversesMustBe510");
+}
+
 bool ControllerCaps::UniversesMustBeInNumericalOrder() const {
 
     return DoesXmlNodeExist(_config, "UniversesMustBeInNumericalOrder");
@@ -405,16 +428,22 @@ bool ControllerCaps::SupportsPixelPortColourOrder() const {
 bool ControllerCaps::SupportsEthernetInputProtols() const
 {
     for (const auto& it : GetInputProtocols()) {
-        if (it == "e131" || it == "artnet" || it == "kinet" || it == "zcpp" || it == "ddp" || it == "opc" || it == "xxx ethernet") return true;
+        if (it == "e131" || it == "artnet" || it == "kinet" || it == "zcpp" || it == "ddp" || it == "opc" || it == "xxx ethernet" || it == "twinkly")
+            return true;
     }
     return false;
+}
+
+bool ControllerCaps::IsPlayerOnly() const
+{
+    return DoesXmlNodeExist(_config, "PlayerOnly");
 }
 
 bool ControllerCaps::SupportsSerialInputProtols() const
 {
     for (const auto& it : GetInputProtocols()) {
-        if (it == "dmx" || it == "lor" || it == "renard" || 
-            it == "opendmx" || it == "pixelnet" || it == "open pixelnet" || 
+        if (it == "dmx" || it == "lor" || it == "renard" ||
+            it == "opendmx" || it == "pixelnet" || it == "open pixelnet" ||
             it == "dlight" || it == "lor optimised" || it == "xxx serial" || it == "ddp-input") return true;
     }
     return false;
@@ -444,6 +473,11 @@ bool ControllerCaps::SupportsPixelPortDirection() const {
 bool ControllerCaps::SupportsPixelPortGrouping() const {
 
     return SupportsPixelPortCommonSettings() || DoesXmlNodeExist(_config, "SupportsPixelPortGrouping");
+}
+
+bool ControllerCaps::SupportsPixelZigZag() const
+{
+    return DoesXmlNodeExist(_config, "SupportsPixelZigZag");
 }
 
 bool ControllerCaps::SupportsTs() const
@@ -531,6 +565,11 @@ int ControllerCaps::GetMaxEndNullPixels() const
 int ControllerCaps::GetMaxGroupPixels() const
 {
     return wxAtoi(GetXmlNodeContent(_config, "MaxGroup", "-1"));
+}
+
+int ControllerCaps::GetMaxZigZagPixels() const
+{
+    return wxAtoi(GetXmlNodeContent(_config, "MaxZigZag", "-1"));
 }
 
 int ControllerCaps::GetMinGroupPixels() const

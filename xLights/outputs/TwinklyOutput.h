@@ -65,8 +65,9 @@ public:
     virtual void AllOff() override;
 #pragma endregion
 
-    bool Get2dLayout(std::vector<std::tuple<float, float, float>>& result);
-    static bool Get2dLayout(const std::string& ip, std::vector<std::tuple<float, float, float>>& result);
+    bool GetLayout(std::vector<std::tuple<float, float, float>>& result);
+    static bool GetLayout(const std::string& ip, std::vector<std::tuple<float, float, float>>& result);
+    virtual void SetTransientData(int32_t& startChannel, int nullnumber) override;
 
 private:
     // A single twinkly connection may have unlimited channels

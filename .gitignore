@@ -52,3 +52,6 @@ xLights/xlights_build_version.h
 xScanner/x64
 .metadata
 .settings
+/xLights/enc_temp_folder
+*~
+/.vs/xLights/v17

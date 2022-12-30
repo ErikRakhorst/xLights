@@ -68,6 +68,17 @@ std::string TwinklyOutput::GetLongDescription() const
     res += "[" + std::string(wxString::Format(wxT("%i"), _channels)) + "] ";
     return res;
 }
+
+void TwinklyOutput::SetTransientData(int32_t& startChannel, int nullnumber)
+{
+    if (_fppProxyOutput) {
+        _fppProxyOutput->SetTransientData(startChannel, nullnumber);
+    }
+
+    wxASSERT(startChannel != -1);
+    _startChannel = startChannel;
+    startChannel += GetChannels();
+}
 #pragma endregion
 
 #pragma region Start and Stop
@@ -75,6 +86,10 @@ bool TwinklyOutput::Open()
 {
     if (!IPOutput::Open()) {
         return false;
+    }
+
+    if (_fppProxyOutput) {
+        return _ok;
     }
 
     // ensure the token is fresh
@@ -100,9 +115,11 @@ void TwinklyOutput::Close()
         _datagram = nullptr;
     }
 
-    // turn off
-    wxJSONValue result;
-    MakeCall("POST", "/xled/v1/led/mode", result, "{\"mode\": \"off\"}");
+    if (!_fppProxyOutput) {
+        // turn off
+        wxJSONValue result;
+        MakeCall("POST", "/xled/v1/led/mode", result, "{\"mode\": \"off\"}");
+    }
 
     IPOutput::Close();
 }
@@ -116,6 +133,11 @@ void TwinklyOutput::StartFrame(long msec)
     if (!_enabled) {
         return;
     }
+
+    if (_fppProxyOutput) {
+        return _fppProxyOutput->StartFrame(msec);
+    }
+
     if (_datagram == nullptr && OutputManager::IsRetryOpen()) {
         OpenDatagram();
         if (_ok) {
@@ -131,6 +153,12 @@ void TwinklyOutput::EndFrame(int suppressFrames)
     if (!_enabled || _suspend || _tempDisable || _datagram == nullptr) {
         return;
     }
+
+    if (_fppProxyOutput) {
+        _fppProxyOutput->EndFrame(suppressFrames);
+        return;
+    }
+
     if (_channels > m_channelData.size()) {
         m_channelData.resize(_channels);
     }
@@ -177,27 +205,54 @@ void TwinklyOutput::EndFrame(int suppressFrames)
 
 void TwinklyOutput::ResetFrame()
 {
+    if (!_enabled)
+        return;
+    if (_fppProxyOutput) {
+        _fppProxyOutput->ResetFrame();
+        return;
+    }
 }
 #pragma endregion
 
 #pragma region Frame Handling
 void TwinklyOutput::SetOneChannel(int32_t channel, unsigned char data)
 {
-    if (_channels > m_channelData.size()) {
-        m_channelData.resize(_channels);
+    if (!_enabled)
+        return;
+
+    if (_fppProxyOutput) {
+        _fppProxyOutput->SetOneChannel(channel, data);
+    } else {
+        if (_channels > m_channelData.size()) {
+            m_channelData.resize(_channels);
+        }
+        m_channelData[channel] = data;
     }
-    m_channelData[channel] = data;
 }
 void TwinklyOutput::SetManyChannels(int32_t channel, unsigned char* data, size_t size)
 {
-    if (_channels > m_channelData.size()) {
-        m_channelData.resize(_channels);
+    if (!_enabled)
+        return;
+
+    if (_fppProxyOutput) {
+        _fppProxyOutput->SetManyChannels(channel, data, size);
+    } else {
+        if (_channels > m_channelData.size()) {
+            m_channelData.resize(_channels);
+        }
+        std::copy(data, data + size, m_channelData.data());
     }
-    std::copy(data, data + size, m_channelData.data());
 }
 void TwinklyOutput::AllOff()
 {
-    memset(m_channelData.data(), 0x00, m_channelData.size());
+    if (!_enabled)
+        return;
+
+    if (_fppProxyOutput) {
+        _fppProxyOutput->AllOff();
+    } else {
+        memset(m_channelData.data(), 0x00, m_channelData.size());
+    }
 }
 #pragma endregion
 
@@ -205,14 +260,28 @@ bool TwinklyOutput::MakeCall(const std::string& method, const std::string& path,
 {
     static log4cpp::Category& logger_base = log4cpp::Category::getInstance(std::string("log_base"));
     logger_base.debug("Twinkly: Invoke " + method + " http://" + _ip + path);
+    if (body != nullptr)
+        logger_base.debug("         '%s'", body);
 
-    std::vector<std::pair<std::string, std::string>> customHeaders = {};
+    wxString bod;
+    if (body != nullptr) {
+        bod = wxString(body);
+    }
+
+logger_base.debug("A");
+
+    std::vector<std::pair<std::string, std::string>> customHeaders;
     if (!m_token.empty()) {
         // assign authentication token if present
         customHeaders.push_back(std::pair("X-Auth-Token", m_token));
     }
+
+logger_base.debug("B");
+
     int responseCode;
-    std::string httpResponse = Curl::HTTPSPost("http://" + _ip + path, body, "", "", "JSON", HTTP_TIMEOUT, customHeaders, &responseCode);
+    std::string httpResponse = Curl::HTTPSPost("http://" + _ip + path, bod, "", "", "JSON", HTTP_TIMEOUT, customHeaders, &responseCode);
+
+logger_base.debug("C");
 
     if (responseCode != 200) {
         logger_base.error("Twinkly: Error %d : %s", responseCode, (const char*)httpResponse.c_str());
@@ -220,21 +289,29 @@ bool TwinklyOutput::MakeCall(const std::string& method, const std::string& path,
 
     wxJSONReader reader;
     wxString str(httpResponse);
+
+logger_base.debug("D");
+
     if (reader.Parse(str, &result)) {
-        wxString result;
+        logger_base.debug("DX");
+        wxString err;
         auto errors = reader.GetErrors();
-        for (int i = 0; i < errors.GetCount(); i++) {
-            result.Append(errors.Item(i)).Append(", ");
+        for (int i = 0; i < errors.GetCount(); ++i) {
+            err.Append(errors.Item(i)).Append(", ");
         }
-        logger_base.error("Twinkly: Returned json is not valid: " + result);
+        logger_base.error("Twinkly: Returned json is not valid: " + err + " : '" + str + "'");
         return false;
     }
 
+logger_base.debug("E");
+
     int32_t code;
-    if (!result.Get("code", "").AsInt32(code) || code != 1000) {
+    if (!result.Get("code", wxJSONValue(0)).AsInt32(code) || code != 1000) {
         logger_base.error("Twinkly: Server returned: " + std::to_string(code));
         return false;
     }
+
+logger_base.debug("F");
 
     return true;
 }
@@ -301,7 +378,7 @@ void TwinklyOutput::OpenDatagram()
 }
 #pragma endregion
 
-bool TwinklyOutput::Get2dLayout(const std::string& ip, std::vector<std::tuple<float, float, float>>& result)
+bool TwinklyOutput::GetLayout(const std::string& ip, std::vector<std::tuple<float, float, float>>& result)
 {
     static log4cpp::Category& logger_base = log4cpp::Category::getInstance(std::string("log_base"));
 
@@ -313,6 +390,8 @@ bool TwinklyOutput::Get2dLayout(const std::string& ip, std::vector<std::tuple<fl
         logger_base.error("Twinkly: Error %d : %s", responseCode, (const char*)httpResponse.c_str());
         return false;
     }
+
+    logger_base.debug("%s", (const char*)httpResponse.c_str());
 
     wxJSONReader reader;
     wxJSONValue jsonDoc;
@@ -337,15 +416,16 @@ bool TwinklyOutput::Get2dLayout(const std::string& ip, std::vector<std::tuple<fl
 
     for (uint32_t i = 0; i < coords->Count(); i++) {
         auto v = coords->Item(i);
-        result.push_back(std::tuple<float, float, float>(v["x"].AsDouble(), v["y"].AsDouble(), v["z"].AsDouble()));
+        // we invert Y as that is how it comes from Twinkly
+        result.push_back(std::tuple<float, float, float>(v["x"].AsDouble(), 1.0 - v["y"].AsDouble(), v["z"].AsDouble()));
     }
 
     return true;
 }
 
-bool TwinklyOutput::Get2dLayout(std::vector<std::tuple<float,float,float>>& result)
+bool TwinklyOutput::GetLayout(std::vector<std::tuple<float,float,float>>& result)
 {
-    return Get2dLayout(_ip, result);
+    return GetLayout(_ip, result);
 }
 
 #ifndef EXCLUDENETWORKUI
@@ -474,13 +554,12 @@ void TwinklyOutput::PrepareDiscovery(Discovery& discovery)
                 controller->SetName((char*)&response[6]);
 
                 std::vector<std::tuple<float, float, float>> pixels;
-                if (Get2dLayout(ip, pixels)) {
+                if (GetLayout(ip, pixels)) {
                     controller->SetChannelSize(pixels.size() * 3);
                 }
 
                 dd = discovery.AddController(controller);
             }
-            ControllerEthernet* controller = dd->controller;
         }
     });
 
