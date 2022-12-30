@@ -50,3 +50,5 @@ xLights/xlights_build_version.h
 *.log
 *.db
 xScanner/x64
+.metadata
+.settings
