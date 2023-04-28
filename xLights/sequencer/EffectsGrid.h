@@ -120,9 +120,11 @@ public:
     void InsertEffectLayerAbove();
     void InsertEffectLayerBelow();
     void ToggleExpandElement(RowHeading* rowHeading);
+    void PlayLoopedEffect(Effect* eff, bool loop);
 
     void DeleteSelectedEffects();
     void SetEffectsDescription();
+    void ResetEffect();
     void SetEffectsTiming();
     void ProcessDroppedEffect(Effect* effect);
     void CutModelEffects(int row_number, bool allLayers);
@@ -343,6 +345,7 @@ private:
     static const long ID_GRID_MNU_DELETE;
     static const long ID_GRID_MNU_RANDOM_EFFECTS;
     static const long ID_GRID_MNU_DESCRIPTION;
+    static const long ID_GRID_MNU_RESETEFFECT;
     static const long ID_GRID_MNU_LOCK;
     static const long ID_GRID_MNU_UNLOCK;
     static const long ID_GRID_MNU_RENDERDISABLE;

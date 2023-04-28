@@ -151,12 +151,24 @@ void ControllerEthernet::SetIP(const std::string& ip) {
     auto const& iip = ip_utils::CleanupIP(ip);
     if (_ip != iip) {
         _ip = iip;
-        _resolvedIp = ip_utils::ResolveIP(_ip);
+        if (IsActive()) _resolvedIp = ip_utils::ResolveIP(_ip);
         _dirty = true;
         if (_outputManager != nullptr) _outputManager->UpdateUnmanaged();
 
         for (auto& it : GetOutputs()) {
-            it->SetIP(_ip);
+            it->SetIP(_ip, IsActive());
+            it->SetResolvedIP(_resolvedIp);
+        }
+    }
+}
+
+// because we dont resolve IPs on creation for inactive controllers then if the controller is set active we need to resolve it then
+void ControllerEthernet::PostSetActive()
+{
+    if (IsActive() && _ip != "" && _resolvedIp == "")
+    {
+        _resolvedIp = ip_utils::ResolveIP(_ip);
+        for (auto& it : GetOutputs()) {
             it->SetResolvedIP(_resolvedIp);
         }
     }
@@ -178,33 +190,43 @@ void ControllerEthernet::SetProtocol(const std::string& protocol) {
         if (_type == OUTPUT_ZCPP) {
             auto zo = new ZCPPOutput();
             _outputs.push_back(zo);
-            zo->SetId(oldoutputs.front()->GetUniverse());
+            if (oldoutputs.size() != 0) {
+                zo->SetId(oldoutputs.front()->GetUniverse());
+            }
             SetId(zo->GetId());
         }
         else if (_type == OUTPUT_DDP) {
             auto ddpo = new DDPOutput();
             _outputs.push_back(ddpo);
-            if (_outputManager != nullptr && _outputManager->IsIDUsed(oldoutputs.front()->GetUniverse())) {
+
+            if (oldoutputs.size() != 0) {
+                if (_outputManager != nullptr && _outputManager->IsIDUsed(oldoutputs.front()->GetUniverse())) {
+                    ddpo->SetId(_outputManager->UniqueId());
+                } else {
+                    ddpo->SetId(oldoutputs.front()->GetUniverse());
+                }
+            } else if (_outputManager != nullptr) {
                 ddpo->SetId(_outputManager->UniqueId());
-            }
-            else {
-                ddpo->SetId(oldoutputs.front()->GetUniverse());
             }
             SetId(ddpo->GetId());
         } else if (_type == OUTPUT_TWINKLY) {
             auto to = new TwinklyOutput();
             _outputs.push_back(to);
-            if (_outputManager != nullptr && _outputManager->IsIDUsed(oldoutputs.front()->GetUniverse())) {
+            if (oldoutputs.size() != 0) {
+                if (_outputManager != nullptr && _outputManager->IsIDUsed(oldoutputs.front()->GetUniverse())) {
+                    to->SetId(_outputManager->UniqueId());
+                } else {
+                    to->SetId(oldoutputs.front()->GetUniverse());
+                }
+            } else if (_outputManager != nullptr) {
                 to->SetId(_outputManager->UniqueId());
-            } else {
-                to->SetId(oldoutputs.front()->GetUniverse());
             }
             SetId(to->GetId());
         }
-        if (_outputs.size() > 0) {
+        if (_outputs.size() > 0 && oldoutputs.size() != 0) {
             _outputs.front()->SetChannels(totchannels);
             _outputs.front()->SetFPPProxyIP(oldoutputs.front()->GetFPPProxyIP());
-            _outputs.front()->SetIP(oldoutputs.front()->GetIP());
+            _outputs.front()->SetIP(oldoutputs.front()->GetIP(), IsActive());
             _outputs.front()->SetSuppressDuplicateFrames(oldoutputs.front()->IsSuppressDuplicateFrames());
         }
     }
@@ -227,7 +249,7 @@ void ControllerEthernet::SetProtocol(const std::string& protocol) {
                     _outputs.push_back(new OPCOutput());
                 }
                 if (_outputs.size() > 0) {
-                    _outputs.back()->SetIP(oldoutputs.front()->GetIP());
+                    _outputs.back()->SetIP(oldoutputs.front()->GetIP(), IsActive());
                     _outputs.back()->SetUniverse(it->GetUniverse());
                     _outputs.back()->SetChannels(it->GetChannels());
                     _outputs.back()->Enable(IsActive());
@@ -240,11 +262,13 @@ void ControllerEthernet::SetProtocol(const std::string& protocol) {
             int left = universes * CONVERT_CHANNELS_PER_UNIVERSE;
 
             int u = 0;
-            if (_outputManager != nullptr && _outputManager->IsIDUsed(oldoutputs.front()->GetUniverse())) {
-                u = _outputManager->UniqueId() - 1;
-            }
-            else {
-                u = oldoutputs.front()->GetUniverse() - 1;
+
+            if (oldoutputs.size() != 0) {
+                if (_outputManager != nullptr && _outputManager->IsIDUsed(oldoutputs.front()->GetUniverse())) {
+                    u = _outputManager->UniqueId() - 1;
+                } else {
+                    u = oldoutputs.front()->GetUniverse() - 1;
+                }
             }
 
             for (int i = 0; i < universes; i++) {
@@ -263,10 +287,10 @@ void ControllerEthernet::SetProtocol(const std::string& protocol) {
                 else if (_type == OUTPUT_OPC) {
                     _outputs.push_back(new OPCOutput());
                 }
-                if (_outputs.size() > 0) {
+                if (_outputs.size() > 0 && oldoutputs.size() != 0) {
                     _outputs.back()->SetChannels(left > CONVERT_CHANNELS_PER_UNIVERSE ? CONVERT_CHANNELS_PER_UNIVERSE : left);
                     left -= _outputs.back()->GetChannels();
-                    _outputs.back()->SetIP(oldoutputs.front()->GetIP());
+                    _outputs.back()->SetIP(oldoutputs.front()->GetIP(), IsActive());
                     _outputs.back()->SetUniverse(u + i + 1);
                     _outputs.back()->Enable(IsActive());
                 }
@@ -603,7 +627,7 @@ Output::PINGSTATE ControllerEthernet::Ping() {
     }
     else {
         E131Output ipo;
-        ipo.SetIP(_ip);
+        ipo.SetIP(_ip, IsActive());
         _lastPingResult = ipo.Ping(GetResolvedIP(), GetFPPProxy());
     }
     return GetLastPingState();
@@ -763,7 +787,7 @@ bool ControllerEthernet::SetChannelSize(int32_t channels, std::list<Model*> mode
                 _outputs.push_back(new OPCOutput());
             }
             _outputs.back()->SetChannels(channels_per_universe);
-            _outputs.back()->SetIP(oldIP);
+            _outputs.back()->SetIP(oldIP, IsActive());
             _outputs.back()->SetUniverse(lastUsedUniverse + 1);
             _outputs.back()->SetFPPProxyIP(_fppProxy);
             _outputs.back()->SetForceLocalIP(_forceLocalIP);
@@ -779,7 +803,8 @@ bool ControllerEthernet::SetChannelSize(int32_t channels, std::list<Model*> mode
                 if (m->IsSerialProtocol() && m->GetControllerPort() == lastSerialPort) {
                     // do nothing
                 } else if (m->IsSerialProtocol()) {
-                    if (GetControllerCaps()->NeedsFullUniverseForDMX()) {
+                    // This wass a leap before you look bug... triggered with missing .xcontroller file
+                    if (GetControllerCaps() == nullptr || GetControllerCaps()->NeedsFullUniverseForDMX()) {
                         (*o)->SetChannels(GetControllerCaps() == nullptr ? 510 : GetControllerCaps()->GetMaxSerialPortChannels()); // serial universes are always their max or 510 if we dont know the max
                         ++o;
                     } else {
@@ -1001,7 +1026,7 @@ void ControllerEthernet::AddProperties(wxPropertyGrid* propertyGrid, ModelManage
                 auto modelsOnUniverse = modelManager->GetModelsOnChannels(it->GetStartChannel(), it->GetEndChannel(), 4);
                 p->SetHelpString(wxString::Format("[%d-%d]\n", it->GetStartChannel(), it->GetEndChannel()) + modelsOnUniverse);
                 if (modelsOnUniverse != "") {
-                    if (wxSystemSettings::GetAppearance().IsDark()) {
+                    if (IsDarkMode()) {
                         p->SetBackgroundColour(wxColour(104, 128, 79));
                     } else {
                         p->SetBackgroundColour(wxColour(208, 255, 158));
@@ -1380,7 +1405,7 @@ void ControllerEthernet::AddOutput()
 		wxASSERT(false);
 	}
     if (_outputs.size() > 0) {
-        _outputs.back()->SetIP(_outputs.front()->GetIP());
+        _outputs.back()->SetIP(_outputs.front()->GetIP(), IsActive());
         _outputs.back()->SetChannels(_outputs.front()->GetChannels());
         _outputs.back()->SetFPPProxyIP(_outputs.front()->GetFPPProxyIP());
         _outputs.back()->SetSuppressDuplicateFrames(_outputs.front()->IsSuppressDuplicateFrames());

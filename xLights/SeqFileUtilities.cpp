@@ -93,7 +93,7 @@ void xLightsFrame::AddAllModelsToSequence()
     _sequenceElements.AddMissingModelsToSequence(models_to_add);
 }
 
-void xLightsFrame::NewSequence(const std::string& media, uint32_t durationMS)
+void xLightsFrame::NewSequence(const std::string& media, uint32_t durationMS, uint32_t frameMS, const std::string& defView)
 {
     // close any open sequences
     if (!CloseSequence()) {
@@ -103,7 +103,7 @@ void xLightsFrame::NewSequence(const std::string& media, uint32_t durationMS)
     // assign global xml file object
     wxFileName xml_file;
     xml_file.SetPath(CurrentDir);
-    CurrentSeqXmlFile = new xLightsXmlFile(xml_file);
+    CurrentSeqXmlFile = new xLightsXmlFile(xml_file, frameMS);
 
     if (_modelBlendDefaultOff) {
         CurrentSeqXmlFile->setSupportsModelBlending(false);
@@ -180,7 +180,10 @@ void xLightsFrame::NewSequence(const std::string& media, uint32_t durationMS)
 
     OutputTimer.Start(_seqData.FrameTime(), wxTIMER_CONTINUOUS);
     displayElementsPanel->Initialize();
-    const std::string view = setting_dlg.GetView();
+    std::string view = setting_dlg.GetView();
+    if (defView != "" && (defView == "All Models" || defView == "Empty" || displayElementsPanel->HasView(defView))) {
+        view = defView;
+    }
     if (view == "All Models") {
         AddAllModelsToSequence();
         displayElementsPanel->SelectView("Master View");
@@ -1331,20 +1334,18 @@ void xLightsFrame::ImportXLights(SequenceElements& se, const std::vector<Element
         }
         else if (e->GetType() == ElementType::ELEMENT_TYPE_TIMING) {
             TimingElement* tel = dynamic_cast<TimingElement*>(e);
-            if (tel->GetFixedTiming() == 0) {
-                bool hasEffects = false;
-                for (size_t n = 0; n < tel->GetEffectLayerCount(); ++n) {
-                    hasEffects |= tel->GetEffectLayer(n)->GetEffectCount() > 0;
-                }
-                if (hasEffects) {
-                    timingTrackNames.push_back(tel->GetName());
-                    timingTracks[tel->GetName()] = tel;
-
-                    // we want to know which timing tracks exist so we can preselect the ones which are not already present
-                    // a timing track is only considered to exist if it has at least one timing mark
-                    timingTrackAlreadyExists[tel->GetName()] = (_sequenceElements.GetTimingElement(tel->GetName()) != nullptr && _sequenceElements.GetTimingElement(tel->GetName())->HasEffects());
-                }
+            bool hasEffects = false;
+            for (size_t n = 0; n < tel->GetEffectLayerCount(); ++n) {
+                hasEffects |= tel->GetEffectLayer(n)->GetEffectCount() > 0;
             }
+            if (hasEffects) {
+                timingTrackNames.push_back(tel->GetName());
+                timingTracks[tel->GetName()] = tel;
+
+                // we want to know which timing tracks exist so we can preselect the ones which are not already present
+                // a timing track is only considered to exist if it has at least one timing mark
+                timingTrackAlreadyExists[tel->GetName()] = (_sequenceElements.GetTimingElement(tel->GetName()) != nullptr && _sequenceElements.GetTimingElement(tel->GetName())->HasEffects());
+            }            
         }
     }
 
@@ -2373,7 +2374,7 @@ void xLightsFrame::ImportSuperStar(const wxFileName &filename)
         wxString blend = dlg.Choice_LayerBlend->GetStringSelection();
         Model *cls = GetModel(model->GetFullName());
         int bw, bh;
-        cls->GetBufferSize("Default", "2D", "None", bw, bh);
+        cls->GetBufferSize("Default", "2D", "None", bw, bh, 0);
         wxSize modelSize(bw, bh);
         ImportSuperStar(model, input_xml, x_size, y_size, x_offset, y_offset, dlg.ImageResizeChoice->GetSelection(), modelSize, blend);
     }

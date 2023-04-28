@@ -145,7 +145,13 @@ void InitialiseLogging(bool fromMain)
             }
         }
         loggingInitialised = true;
-
+        //make sure the default logging location is actually created
+        std::string ld = std::getenv("HOME");
+        ld += "/Library/Logs/";
+        wxDir logDir(ld);
+        if (!wxDir::Exists(ld)) {
+            wxDir::Make(ld);
+        }
 #endif
 #ifdef __LINUX__
         std::string initFileName = wxStandardPaths::Get().GetInstallPrefix() + "/bin/xlights.linux.properties";
@@ -435,7 +441,11 @@ bool xLightsApp::OnInit()
     InitialiseLogging(false);
     static log4cpp::Category &logger_base = log4cpp::Category::getInstance(std::string("log_base"));
     logger_base.info("******* OnInit: XLights started.");
-
+#ifdef __WXMSW__
+    if (!IsSuppressDarkMode()) {
+        MSWEnableDarkMode();
+    }
+#endif
 #if wxUSE_GLCANVAS_EGL
     // this is only needed if using the EGL canvas as it's necessary to initialize the
     // GL attributes and pixel formats.  Likely a bug in the EGL implementation,

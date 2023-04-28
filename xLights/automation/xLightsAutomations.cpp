@@ -185,6 +185,17 @@ bool xLightsFrame::ProcessAutomation(std::vector<std::string> &paths,
 
         AskCloseSequence();
         return sendResponse("Sequence closed.", "msg", 200, false);
+    } else if (cmd == "saveLayout") {
+        if (!layoutPanel->SaveEffects()) {
+            return sendResponse("Failed to save layout.", "msg", 503, false);
+        }
+
+        if (!SaveNetworksFile()) {
+            return sendResponse("Failed to controller tab.", "msg", 503, false);
+        }
+
+        return sendResponse("Layout and controller tab saved.", "msg", 200, false);
+
     } else if (cmd == "newSequence") {
         if (CurrentSeqXmlFile != nullptr && !ReadBool(params["force"])) {
             return sendResponse("Sequence already open.", "msg", 503, false);
@@ -195,7 +206,13 @@ bool xLightsFrame::ProcessAutomation(std::vector<std::string> &paths,
             media = "";
         auto duration = wxAtoi(params["durationSecs"]) * 1000;
 
-        NewSequence(media, duration);
+        uint32_t frameMS = wxAtoi(params["frameMS"]); // this will be 0 if "null" so ok
+
+        std::string view = params["view"];
+        if (view == "null")
+            view = "";
+
+        NewSequence(media, duration, frameMS, view);
         EnableSequenceControls(true);
         return sendResponse("Sequence created.", "msg", 200, false);
     } else if (cmd == "saveSequence") {
@@ -838,10 +855,21 @@ bool xLightsFrame::ProcessAutomation(std::vector<std::string> &paths,
         }
         models = "[" + models + "]";
         return sendResponse(models, "models", 200, true);
-    } else if (cmd == "getControllerNames") {
+        
+    } else if (cmd == "getModel") {
+        auto model = params["model"];
+        auto m = AllModels.GetModel(model);
+        if (nullptr == m) {
+            return sendResponse("Unknown model.", "msg", 503, false);
+        }
+        auto json = m->GetAttributesAsJSON();
+        return sendResponse(json, "model", 200, true);
+        
+    } else if (cmd == "getControllers") {
         std::string controllers;
-        for (const auto& it : _outputManager.GetControllerNames()) {
-            controllers += "\"" + JSONSafe(it) + "\",";
+        for (const auto& it : _outputManager.GetControllers()) {
+            std::string json = it->GetJSONData() + ",";
+            controllers += json;
         }
         if (!controllers.empty()) {
             controllers.pop_back();//remove last comma
@@ -860,6 +888,16 @@ bool xLightsFrame::ProcessAutomation(std::vector<std::string> &paths,
         }
         ipAddresses = "[" + ipAddresses + "]";
         return sendResponse(ipAddresses, "controllers", 200, true);
+    } else if (cmd == "getControllerPortMap") {
+        auto ip = params["ip"];
+        auto controller = _outputManager.GetControllerWithIP(ip);
+        if (controller == nullptr) {
+            return "{\"res\":504,\"msg\":\"Controller not found.\"}";
+        }
+        
+        UDController cud(controller, &_outputManager, &AllModels, false);
+        auto json = cud.ExportAsJSON();
+        return sendResponse(json, "controllerportmap", 200, true);
     } else if (cmd == "getEffectIDs") {
         if (CurrentSeqXmlFile == nullptr) {
             return sendResponse("Sequence not open.", "msg", 503, false);
@@ -880,12 +918,29 @@ bool xLightsFrame::ProcessAutomation(std::vector<std::string> &paths,
                 ids.pop_back(); // remove last comma
             }
             ids.insert(0, "[");
-            ids.append( "],");
-            layers.append( ids );
+            ids.append("],");
+            layers.append(ids);
         }
         layers.pop_back(); // remove last comma
         layers += "]";
         return sendResponse(layers, "effects", 200, true);
+    } else if (cmd == "cleanupFileLocations") {
+
+        bool res = CleanupRGBEffectsFileLocations();
+
+        if (CurrentSeqXmlFile != nullptr) {
+            res = res && CleanupSequenceFileLocations();
+        }
+
+        if (res) {
+            std::string response = "{\"msg\":\"Cleanup file locations.\",\"worked\":\"true\"}";
+            return sendResponse(response, "", 200, true);
+        }
+        else
+        {
+            return sendResponse("Cleanup file locations failed.", "msg", 503, false);
+        }
+
     } else if (cmd == "getEffectSettings") {
         if (CurrentSeqXmlFile == nullptr) {
             return sendResponse("Sequence not open.", "msg", 503, false);
@@ -986,7 +1041,8 @@ bool xLightsFrame::ProcessAutomation(std::vector<std::string> &paths,
         
         std::string response = "{\"msg\":\"Imported XLights Sequence.\",\"worked\":\"true\"}";
         return sendResponse(response, "", 200, true);
-       
+    } else if (cmd == "getShowFolder") {
+        return sendResponse(JSONSafe(showDirectory), "folder", 200, false);
     }
 
     return false;

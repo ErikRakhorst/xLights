@@ -2878,12 +2878,12 @@ void xLightsFrame::DoLoadPerspective(wxXmlNode *perspective)
         m_mgr->Update();
     }
 
-    if (mEffectAssistMode == EFFECT_ASSIST_ALWAYS_OFF) {
+    if (tempEffectAssistMode == EFFECT_ASSIST_ALWAYS_OFF) {
         SetEffectAssistWindowState(false);
-    } else if (mEffectAssistMode == EFFECT_ASSIST_ALWAYS_ON) {
+    } else if (tempEffectAssistMode == EFFECT_ASSIST_ALWAYS_ON) {
         bool visible = m_mgr->GetPane("EffectAssist").IsShown();
         if (!visible) {
-            mEffectAssistMode = EFFECT_ASSIST_NOT_IN_PERSPECTIVE;
+            tempEffectAssistMode = EFFECT_ASSIST_NOT_IN_PERSPECTIVE;
         }
     }
 
@@ -3131,16 +3131,20 @@ void xLightsFrame::ShowHideEffectAssistWindow(wxCommandEvent& event)
     bool visible = m_mgr->GetPane("EffectAssist").IsShown();
     if (visible) {
         m_mgr->GetPane("EffectAssist").Hide();
-        mEffectAssistMode = EFFECT_ASSIST_ALWAYS_OFF;
+        // Dont set it permanently
+        //mEffectAssistMode = EFFECT_ASSIST_ALWAYS_OFF;
+        tempEffectAssistMode = EFFECT_ASSIST_ALWAYS_OFF;
     } else {
         m_mgr->GetPane("EffectAssist").Show();
-        mEffectAssistMode = EFFECT_ASSIST_ALWAYS_ON;
+        // Dont set it permanently
+        // mEffectAssistMode = EFFECT_ASSIST_ALWAYS_ON;
+        tempEffectAssistMode = EFFECT_ASSIST_ALWAYS_ON;
     }
     m_mgr->Update();
     UpdateViewMenu();
 }
 
-TimingElement* xLightsFrame::AddTimingElement(const std::string& name)
+TimingElement* xLightsFrame::AddTimingElement(const std::string& name, const std::string &subType)
 {
     std::string n = RemoveUnsafeXmlChars(name);
     int nn = 1;
@@ -3155,6 +3159,7 @@ TimingElement* xLightsFrame::AddTimingElement(const std::string& name)
     int timingCount = _sequenceElements.GetNumberOfTimingElements();
     std::string type = "timing";
     TimingElement* e = dynamic_cast<TimingElement*>(_sequenceElements.AddElement(timingCount, n, type, true, false, true, false, false));
+    e->SetSubType(subType);
     e->AddEffectLayer();
     _sequenceElements.AddTimingToCurrentView(n);
     wxCommandEvent eventRowHeaderChanged(EVT_ROW_HEADINGS_CHANGED);

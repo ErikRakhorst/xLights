@@ -2218,7 +2218,7 @@ public:
                     const wxImage *img)
         : wxImageFileProperty(label, name, ""), lastFileName(value)
     {
-
+        SetAttribute(wxPG_FILE_WILDCARD, "Image files|*.png;*.bmp;*.jpg;*.gif;*.jpeg|All files (*.*)|*.*");
         SetValueFromString(value);
         if (img != nullptr) {
             setImage(*img);
@@ -2338,11 +2338,11 @@ void LayoutPanel::showBackgroundProperties()
             background = new wxImage(backgroundFile);
         }
     }
-    wxPGProperty* p = propertyEditor->Append(new xlImageProperty("Background Image",
+    wxPGProperty* prop = propertyEditor->Append(new xlImageProperty("Background Image",
         "BkgImage",
         previewBackgroundFile,
         background));
-    p->SetAttribute(wxPG_FILE_WILDCARD, "Image files|*.png;*.bmp;*.jpg;*.gif;*.jpeg|All files (*.*)|*.*");
+
     propertyEditor->Append(new wxBoolProperty("Fill", "BkgFill", previewBackgroundScaled))->SetAttribute("UseCheckbox", 1);
     if (currentLayoutGroup == "Default" || currentLayoutGroup == "All Models" || currentLayoutGroup == "Unassigned") {
         wxPGProperty* prop = propertyEditor->Append(new wxUIntProperty("Width", "BkgSizeWidth", modelPreview->GetVirtualCanvasWidth()));
@@ -2354,7 +2354,7 @@ void LayoutPanel::showBackgroundProperties()
         prop->SetAttribute("Max", 16384);
         prop->SetEditor("SpinCtrl");
     }
-    wxPGProperty* prop = propertyEditor->Append(new wxUIntProperty("Brightness", "BkgBrightness", previewBackgroundBrightness));
+    prop = propertyEditor->Append(new wxUIntProperty("Brightness", "BkgBrightness", previewBackgroundBrightness));
     prop->SetAttribute("Min", 0);
     prop->SetAttribute("Max", 100);
     prop->SetEditor("SpinCtrl");
@@ -2705,7 +2705,7 @@ void LayoutPanel::OnCheckBoxOverlapClick(wxCommandEvent& event)
     }
 }
 
-void LayoutPanel::SaveEffects()
+bool LayoutPanel::SaveEffects()
 {
     // update xml with offsets and scale
     for (const auto& it : modelPreview->GetModels()) {
@@ -2721,6 +2721,8 @@ void LayoutPanel::SaveEffects()
     xlights->SaveEffectsFile();
     xlights->SetStatusText(_("Preview layout saved"));
     SetDirtyHiLight(false);
+
+    return true;
 }
 
 void LayoutPanel::OnButtonSavePreviewClick(wxCommandEvent& event)
@@ -2735,6 +2737,7 @@ void LayoutPanel::OnButtonSavePreviewClick(wxCommandEvent& event)
     SaveEffects();
     if (xlights->IsControllersAndLayoutTabSaveLinked()) {
         xlights->SaveNetworksFile();
+        xlights->UpdateLayoutSave(); // SaveEffects tried to do this, but if the saves are linked it is marked dirty til nets are saved.
     }
 }
 
@@ -3505,6 +3508,7 @@ void LayoutPanel::FinalizeModel()
             {
                 prog = new wxProgressDialog("Model download", "Downloading models ...", 100, this, wxPD_APP_MODAL | wxPD_AUTO_HIDE);
                 prog->Show();
+                prog->CenterOnParent();
             }
             auto oldNewModel = _newModel;
             auto oldam = modelPreview->GetAdditionalModel();
@@ -3651,8 +3655,8 @@ void LayoutPanel::OnPreviewMotion3D(Motion3DEvent &event) {
     int smSize = selectedTreeSubModels.size();
     if (selectedBaseObject != nullptr && gSize == 0 && smSize == 0 && !event.ControlDown() && !event.RawControlDown()) {
         int active_handle = selectedBaseObject->GetBaseObjectScreenLocation().GetActiveHandle();
+        if (!xlights->AbortRender()) return;
         CreateUndoPoint(editing_models ? "SingleModel" : "SingleObject", selectedBaseObject->name, std::to_string(active_handle));
-        xlights->AbortRender();
 
         float scale = modelPreview->translateToBacking(1.0) * 20.0 * modelPreview->GetZoom(); //20 pixels at max speed, default zoom
         if (!modelPreview->Is3D()) {
@@ -3972,6 +3976,8 @@ void LayoutPanel::OnPreviewMouseMove3D(wxMouseEvent& event)
             xlights->AddTraceMessage("LayoutPanel::OnPreviewMouseMove3D Mouse down moving handle");
             Model* m = dynamic_cast<Model*>(selectedBaseObject);
             if (selectedBaseObject != nullptr && (_newModel == selectedBaseObject || xlights->AllModels.IsModelValid(m))) {
+                if (!xlights->AbortRender()) return;
+
                 int active_handle = selectedBaseObject->GetBaseObjectScreenLocation().GetActiveHandle();
 
                 int selectedModelCnt = ModelsSelectedCount();
@@ -3985,7 +3991,6 @@ void LayoutPanel::OnPreviewMouseMove3D(wxMouseEvent& event)
                 }
                 // this is designed to pretend the control and shift keys are down when creating models to
                 // make them scale from the desired handle depending on model type
-                xlights->AbortRender();
                 auto pos = selectedBaseObject->MoveHandle3D(modelPreview, active_handle, event.ShiftDown() || creating_model, event.ControlDown() || (creating_model && z_scale), event.GetX(), event.GetY(), false, z_scale);
                 xlights->SetStatusText(wxString::Format("x=%.2f y=%.2f z=%.2f %s", pos.x, pos.y, pos.z, selectedBaseObject->GetDimension()));
                 //SetupPropGrid(selectedBaseObject);
@@ -4279,10 +4284,10 @@ void LayoutPanel::OnPreviewMouseMove(wxMouseEvent& event)
     }
 
     if (m_moving_handle) {
+        if (!xlights->AbortRender()) return;
         if (m != _newModel) {
             CreateUndoPoint("SingleModel", m->name, std::to_string(m_over_handle));
         }
-        xlights->AbortRender();
         auto pos = m->MoveHandle(modelPreview, m_over_handle, event.ShiftDown(), event.GetX(), event.GetY());
         xlights->SetStatusText(wxString::Format("x=%.2f y=%.2f", pos.x, pos.y));
 
@@ -5140,7 +5145,7 @@ void LayoutPanel::PreviewModelResize(bool sameWidth, bool sameHeight)
     int selectedindex = GetSelectedModelIndex();
     if (selectedindex < 0) return;
 
-    xlights->AbortRender();
+    if (!xlights->AbortRender()) return;
 
     std::vector<std::list<std::string>> selectedModelPaths = GetSelectedTreeModelPaths();
 
@@ -5659,6 +5664,7 @@ void LayoutPanel::SetTreeSubModelSelected(Model* model, bool isPrimary) {
 }
 
 void LayoutPanel::CheckModelForOverlaps(Model* model) {
+    // this is the channel range of the clicked on model
     int mStart = model->GetNumberFromChannelString(model->ModelStartChannel);
     int mEnd = model->GetLastChannel();
 
@@ -5669,20 +5675,13 @@ void LayoutPanel::CheckModelForOverlaps(Model* model) {
             ModelTreeData *data = dynamic_cast<ModelTreeData*>(TreeListViewModels->GetItemData(item));
             Model *mm = data != nullptr ? data->GetModel() : nullptr;
             if (mm != nullptr && mm != selectedBaseObject) {
+                // this is the channel range of the model we are checking
                 int startChan = mm->GetNumberFromChannelString(mm->ModelStartChannel);
                 int endChan = mm->GetLastChannel();
-                if ((startChan >= mStart) && (endChan <= mEnd)) {
-                    mm->Overlapping = true;
-                }
-                else if ((startChan >= mStart) && (startChan <= mEnd)) {
-                    mm->Overlapping = true;
-                }
-                else if ((endChan >= mStart) && (endChan <= mEnd)) {
-                    mm->Overlapping = true;
-                }
-                else {
-                    mm->Overlapping = false;
-                }
+
+                mm->Overlapping = ((mStart <= startChan && mEnd >= startChan) ||
+                                   (mStart <= endChan && mEnd >= endChan) ||
+                                   (mStart >= startChan && mEnd <= endChan));
             }
         }
     }

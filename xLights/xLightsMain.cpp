@@ -1544,8 +1544,11 @@ xLightsFrame::xLightsFrame(wxWindow* parent, int ab, wxWindowID id) :
     } else if (config->Read(_("MediaDir"), &md)) {
         wxArrayString entries = wxSplit(md, '|', '\0');
         for (auto & d : entries) {
-            ObtainAccessToURL(d.ToStdString());
-            mediaDirectories.push_back(d.ToStdString());
+            std::string dstd = d.ToStdString();
+            ObtainAccessToURL(dstd);
+            if (std::find(mediaDirectories.begin(), mediaDirectories.end(), dstd) == mediaDirectories.end()) {
+                mediaDirectories.push_back(dstd);
+            }
         }
     }
     SetFixFileDirectories(mediaDirectories);
@@ -1719,6 +1722,7 @@ xLightsFrame::xLightsFrame(wxWindow* parent, int ab, wxWindowID id) :
     if (mEffectAssistMode < 0 || mEffectAssistMode > EFFECT_ASSIST_TOGGLE_MODE) {
         mEffectAssistMode = EFFECT_ASSIST_TOGGLE_MODE;
     }
+    tempEffectAssistMode = mEffectAssistMode;
     logger_base.debug("Effect Assist Mode: %d.", mEffectAssistMode);
     if (mEffectAssistMode == EFFECT_ASSIST_ALWAYS_ON) {
         SetEffectAssistWindowState(true);
@@ -1776,7 +1780,11 @@ xLightsFrame::xLightsFrame(wxWindow* parent, int ab, wxWindowID id) :
 #ifndef NDEBUG
     logger_base.debug("xLights Crash Menu item not removed.");
 #ifdef _MSC_VER
-    Notebook1->SetBackgroundColour(*wxGREEN);
+    if (IsDarkMode()) {
+        Notebook1->SetBackgroundColour(wxColour(0x006000));
+    } else {
+        Notebook1->SetBackgroundColour(*wxGREEN);
+    }
 #endif
 #else
     // only keep the crash option if the special option is set
@@ -2123,6 +2131,19 @@ void xLightsFrame::DoPostStartupCommands() {
 #endif
         if (_userEmail == "") CollectUserEmail();
         if (_userEmail != "noone@nowhere.xlights.org") logger_base.debug("User email address: <email>%s</email>", (const char*)_userEmail.c_str());
+        
+#ifdef __WXMSW__
+        int verMaj = -1;
+        int verMin = -1;
+        wxOperatingSystemId o = wxGetOsVersion(&verMaj, &verMin);
+        static bool hasWarned = false;
+        if (verMaj < 8 && !hasWarned) {
+            hasWarned = true;
+            wxMessageBox("Windows 7 has known issues rendering some effects.  Support for Windows 7 may be removed entirely soon.",
+                         "Windows Version",
+                          wxICON_INFORMATION | wxCENTER | wxOK);
+        }
+#endif
     }
 }
 
@@ -2193,7 +2214,6 @@ void xLightsFrame::OnAbout(wxCommandEvent& event)
     dlg.MainSizer->SetSizeHints(&dlg);
 
     if (IsFromAppStore()) {
-        dlg.PrivacyHyperlinkCtrl->SetURL("http://kulplights.com/xlights/privacy_policy.html");
         dlg.EULAHyperlinkCtrl->SetLabel("End User License Agreement");
         dlg.EULAHyperlinkCtrl->SetURL("http://kulplights.com/xlights/eula.html");
         dlg.EULAHyperlinkCtrl->Show();
@@ -2337,7 +2357,7 @@ void xLightsFrame::ShowHideAllSequencerWindows(bool show)
     }
 
     // Handle the effect Assist
-    if (mEffectAssistMode == EFFECT_ASSIST_TOGGLE_MODE) {
+    if (tempEffectAssistMode == EFFECT_ASSIST_TOGGLE_MODE) {
         if (sEffectAssist->GetPanel() != sEffectAssist->GetDefaultAssistPanel() && sEffectAssist->GetPanel() != nullptr) {
             SetEffectAssistWindowState(true);
         }
@@ -2345,7 +2365,7 @@ void xLightsFrame::ShowHideAllSequencerWindows(bool show)
             SetEffectAssistWindowState(false);
         }
     }
-    else if (mEffectAssistMode == EFFECT_ASSIST_ALWAYS_ON) {
+    else if (tempEffectAssistMode == EFFECT_ASSIST_ALWAYS_ON) {
         SetEffectAssistWindowState(true);
     }
     else {
@@ -3459,6 +3479,7 @@ void xLightsFrame::SetSaveFseqOnSave(bool b)
 void xLightsFrame::SetEffectAssistMode(int i)
 {
     mEffectAssistMode = i;
+    tempEffectAssistMode = i;
     if (mEffectAssistMode == EFFECT_ASSIST_ALWAYS_ON) {
         SetEffectAssistWindowState(true);
     } else if (mEffectAssistMode == EFFECT_ASSIST_ALWAYS_OFF) {
@@ -3492,7 +3513,7 @@ void xLightsFrame::UpdateEffectAssistWindow(Effect* effect, RenderableEffect* re
 
     bool effect_is_supported = ren_effect->HasAssistPanel();
 
-    if( mEffectAssistMode == EFFECT_ASSIST_TOGGLE_MODE )
+    if( tempEffectAssistMode == EFFECT_ASSIST_TOGGLE_MODE )
     {
         if( effect_is_supported )
         {
@@ -4278,12 +4299,14 @@ void xLightsFrame::SetMediaFolders(const std::list<std::string>& folders)
     mediaDirectories.clear();
     for (auto const& dir : folders) {
         ObtainAccessToURL(dir);
-        mediaDirectories.push_back(dir);
-        logger_base.debug("Adding Media directory: %s.", (const char*)dir.c_str());
-        if (setting != "") {
-            setting += "|";
-        }
-        setting += dir;
+        if (std::find(mediaDirectories.begin(), mediaDirectories.end(), dir) == mediaDirectories.end()) {
+            mediaDirectories.push_back(dir);
+            logger_base.debug("Adding Media directory: %s.", (const char*)dir.c_str());
+            if (setting != "") {
+                setting += "|";
+            }
+            setting += dir;
+        }        
     }
     config->Write(_("MediaDir"), setting);
     SetFixFileDirectories(mediaDirectories);
@@ -4514,7 +4537,7 @@ void xLightsFrame::ExportModels(wxString const& filename)
             }
 
             int w, h;
-            model->GetBufferSize("Default", "2D", "None", w, h);
+            model->GetBufferSize("Default", "2D", "None", w, h, 0);
             write_worksheet_string(modelsheet, row, 0, model->name, format, _model_col_widths);
             write_worksheet_string(modelsheet, row, 1, model->GetShadowModelFor(), format, _model_col_widths);
             write_worksheet_string(modelsheet, row, 2, model->description, format, _model_col_widths);
@@ -4591,7 +4614,7 @@ void xLightsFrame::ExportModels(wxString const& filename)
                 }
             }
             int w, h;
-            model->GetBufferSize("Default", "2D", "None", w, h);
+            model->GetBufferSize("Default", "2D", "None", w, h, 0);
 
             write_worksheet_string(groupsheet, row, 0, model->name, format, _group_col_widths);
             write_worksheet_string(groupsheet, row, 1, models, format, _group_col_widths);
@@ -5871,7 +5894,7 @@ std::string xLightsFrame::CheckSequence(bool displayInEditor, bool writeToFile)
                     std::vector<NodeBaseClassPtr> nodes;
                     int bufwi;
                     int bufhi;
-                    m->InitRenderBufferNodes("Default", "2D", "None", nodes, bufwi, bufhi);
+                    m->InitRenderBufferNodes("Default", "2D", "None", nodes, bufwi, bufhi, 0);
                     for (const auto& n : nodes) {
                         auto e = usedch.find(n->ActChan);
                         if (e != end(usedch)) {
@@ -7689,11 +7712,11 @@ std::string xLightsFrame::MoveToShowFolder(const std::string& file, const std::s
     return target.ToStdString();
 }
 
-void xLightsFrame::CleanupSequenceFileLocations()
+bool xLightsFrame::CleanupSequenceFileLocations()
 {
     if (GetShowDirectory() == "") {
         wxMessageBox("Show directory invalid. Cleanup aborted.");
-        return;
+        return false;
     }
 
     wxString media = CurrentSeqXmlFile->GetMediaFile();
@@ -7726,9 +7749,11 @@ void xLightsFrame::CleanupSequenceFileLocations()
     {
         _sequenceElements.IncrementChangeCount(nullptr);
     }
+
+    return true;
 }
 
-void xLightsFrame::CleanupRGBEffectsFileLocations()
+bool xLightsFrame::CleanupRGBEffectsFileLocations()
 {
     if (FileExists(mBackgroundImage) && !IsInShowFolder(mBackgroundImage))
     {
@@ -7752,6 +7777,8 @@ void xLightsFrame::CleanupRGBEffectsFileLocations()
             GetOutputModelManager()->AddASAPWork(OutputModelManager::WORK_RGBEFFECTS_CHANGE, "CleanupRGBEffectsFileLocations");
         }
     }
+
+    return true;
 }
 
 void xLightsFrame::OnMenuItem_CleanupFileLocationsSelected(wxCommandEvent& event)

@@ -27,12 +27,13 @@
 #include "xLightsVersion.h"
 #include "ExternalHooks.h"
 
-//#include "string_utils.h"
 
 #include "../xSchedule/wxJSON/json_defs.h"
 #include "../xSchedule/wxJSON/jsonreader.h"
 #include "../xSchedule/wxJSON/jsonval.h"
-#include "../xSchedule/xSMSDaemon/Curl.h"
+
+#include "utils/Curl.h"
+#include "utils/string_utils.h"
 
 #include <mutex>
 #include <string_view>
@@ -61,7 +62,6 @@
 #elif defined (__GCC__) // GCC
 #define thread_local __thread
 #endif
-
 
 
 void DisplayError(const std::string& err, wxWindow* win)
@@ -510,23 +510,23 @@ wxString FixEffectFileParameter(const wxString& paramname, const wxString& param
     return rc;
 }
 
-std::string UnXmlSafe(const wxString &res)
+std::string UnXmlSafe(const std::string &res)
 {
-    if (res.Contains('&')) {
-        wxString r2(res);
-        for (int i = 0; i< 32; ++i)
-        {
-            wxString ss = wxString::Format("&#%d;", i);
-            r2.Replace(ss, wxString::Format("%c", i));
+    if (Contains(res, "&")) {
+        std::string r2(res);
+        for (int i = 0; i< 32; ++i) {
+            std::string ss = "&#" + std::to_string(i);
+            char buf[2] = {(char)i, 0};
+            Replace(r2, ss, buf);
         }
-        r2.Replace("&lt;", "<");
-        r2.Replace("&gt;", ">");
-        r2.Replace("&apos;", "'");
-        r2.Replace("&quot;", "\"");
-        r2.Replace("&amp;", "&");
-        return r2.ToStdString();
+        Replace(r2, "&lt;", "<");
+        Replace(r2, "&gt;", ">");
+        Replace(r2, "&apos;", "'");
+        Replace(r2, "&quot;", "\"");
+        Replace(r2, "&amp;", "&");
+        return r2;
     }
-    return res.ToStdString();
+    return res;
 }
 
 std::string XmlSafe(const std::string& s)
@@ -831,9 +831,9 @@ bool IsVersionOlder(const std::string &compare, const std::string &version)
     {
         if (version_parts.Count() > 2)
         {
-            return true;
+            return false; // remote version has 2 components but local has three so local must be newer
         }
-        return false;
+        return true;
     }
     else
     {
@@ -1430,29 +1430,21 @@ void DumpBinary(uint8_t* buffer, size_t sz)
 
 wxColor CyanOrBlue()
 {
-#ifndef __WXMSW__
-    if (wxSystemSettings::GetAppearance().IsDark()) {
+    if (IsDarkMode()) {
         // In Dark Mode blue is hard to read
         return *wxCYAN;
     } else {
-#endif
         return *wxBLUE;
-#ifndef __WXMSW__
     }
-#endif
 }
 wxColor LightOrMediumGrey()
 {
-#ifndef __WXMSW__
-    if (wxSystemSettings::GetAppearance().IsDark()) {
+    if (IsDarkMode()) {
         static const wxColor medGray(128, 128, 128);
         return medGray;
     } else {
-#endif
         return *wxLIGHT_GREY;
-#ifndef __WXMSW__
     }
-#endif
 }
 void CleanupIpAddress(wxString& IpAddr)
 {
@@ -1484,8 +1476,26 @@ wxString CompressNodes(const wxString& nodes)
     int last = -1;
     auto as = wxSplit(s, ',');
 
+    // There is no difference between empty row and row with one blank pixel (shrug)
+    // We will take removal of the last comma approach
+
     for (const auto& i : as)
     {
+        if (i.empty() || i == "0") {
+            // Flush out start/last if any
+            if (start != -1) {
+                if (last != start) {
+                    res += wxString::Format("%d-%d,", start, last);
+                } else {
+                    res += wxString::Format("%d,", start);
+                }
+            }
+            // Add empty and separator
+            res += i+",";
+            start = last = -1;
+            dir = 0;
+            continue;
+        }
         if (start == -1)
         {
             start = wxAtoi(i);
@@ -1507,8 +1517,7 @@ wxString CompressNodes(const wxString& nodes)
                 }
                 else
                 {
-                    if (res != "") res += ",";
-                    res += wxString::Format("%d", start);
+                    res += wxString::Format("%d,", start);
                     start = j;
                     dir = 0;
                 }
@@ -1521,8 +1530,7 @@ wxString CompressNodes(const wxString& nodes)
                 }
                 else
                 {
-                    if (res != "") res += ",";
-                    res += wxString::Format("%d-%d", start, last);
+                    res += wxString::Format("%d-%d,", start, last);
                     start = j;
                     dir = 0;
                 }
@@ -1535,16 +1543,17 @@ wxString CompressNodes(const wxString& nodes)
     {
         // nothing to do
     }
-    if (start == last)
+    else if (start == last)
     {
-        if (res != "") res += ",";
-        res += wxString::Format("%d", start);
+        res += wxString::Format("%d,", start);
     }
     else
     {
-        if (res != "") res += ",";
-        res += wxString::Format("%d-%d", start, last);
+        res += wxString::Format("%d-%d,", start, last);
     }
+
+    if (!res.empty())
+        res = res.substr(0, res.length() - 1); // Chop last comma
 
     return res;
 }
@@ -1555,6 +1564,7 @@ wxString ExpandNodes(const wxString& nodes)
 
     auto as = wxSplit(nodes, ',');
 
+    bool first = true;
     for (const auto& i : as)
     {
         if (i.Contains("-"))
@@ -1568,20 +1578,20 @@ wxString ExpandNodes(const wxString& nodes)
                 {
                     for (int j = start; j <= end; j++)
                     {
-                        if (res != "") res += ",";
+                        if (!first || res != "") res += ",";
                         res += wxString::Format("%d", j);
                     }
                 }
                 else if (start == end)
                 {
-                    if (res != "") res += ",";
+                    if (!first || res != "") res += ",";
                     res += wxString::Format("%d", start);
                 }
                 else
                 {
                     for (int j = start; j >= end; j--)
                     {
-                        if (res != "") res += ",";
+                        if (!first || res != "") res += ",";
                         res += wxString::Format("%d", j);
                     }
                 }
@@ -1589,9 +1599,10 @@ wxString ExpandNodes(const wxString& nodes)
         }
         else
         {
-            if (res != "") res += ",";
+            if (!first || res != "") res += ",";
             res += i;
         }
+        first = false;
     }
     return res;
 }
@@ -1673,4 +1684,30 @@ bool IsFloat(const std::string& number)
             return false;
     }
     return true;
+}
+
+#ifdef __WXMSW__
+bool IsSuppressDarkMode()
+{
+    wxConfigBase* config = wxConfigBase::Get();
+    return config->ReadBool("SuppressDarkMode", false);
+}
+
+void SetSuppressDarkMode(bool suppress)
+{
+    if (IsSuppressDarkMode() != suppress) {
+        wxConfigBase* config = wxConfigBase::Get();
+        config->Write("SuppressDarkMode", suppress);
+        wxMessageBox("Restart xLights to enable/disable dark mode properly.");
+    }
+}
+#endif
+
+bool IsDarkMode()
+{
+    return wxSystemSettings::GetAppearance().IsDark() 
+#ifdef __WXMSW__
+        && !IsSuppressDarkMode()
+#endif
+        ;
 }

@@ -11,6 +11,100 @@ Issue Tracker is found here: www.github.com/smeighan/xLights/issues
 
 XLIGHTS/NUTCRACKER RELEASE NOTES
 ---------------------------------
+2023.07 April 25, 2023
+   -- enh (keith)   Add -x option to xSchedule to silently exit if xSchedule is already running
+   -- enh (keith)   Add some Hanson Electronics boards
+   -- enh (keith)   Add ability to invert channels on DMX effect
+   -- enh (keith)   Add value curve to picture effect centre
+   -- enh (keith)   When user presses update on effect/colours panel and has > 1 effect selected warn the user about what will happen
+   -- enh (keith)   Add cleanupFileLocations and saveLayout APIs
+   -- enh (keith)   Add stagger to stacked model group buffers
+   -- enh (keith)   Add SVG support to VU Meter level shapes
+   -- enh (keith)   Add warmup frames to snowflakes and meteors effect
+   -- enh (keith)   Allow suppression of dark mode on windows
+   -- enh (keith)   Add video sampling instead of image resizing to video effect
+   -- enh (keith)   Add ability to reset an effects settings explicitly
+   -- enh (keith)   Add chord support to guitar effect ... prefix C before note so CA is the A chord
+   -- enh (keith)   For superstrings > 3 channels add support for RGBW colour handling to control behaviour
+   -- enh (dklup)   FPP Connect upload content to the appropriate directory
+   -- enh (scott)   Increase ESPixelStick outputs to 8
+   -- bug (moc)     Fix ripple effect SVG settings
+   -- bug (keith)   Fix text effect not respecting \n as new line
+   -- bug (keith)   Fix QM crash if using them after doing a notes import
+   -- bug (keith)   Fix QM import creates illegal timing tracks with zero length timing marks and overlapping timing marks
+   -- bug (keith)   Fix show/hide effect assist overwrites effect assist preference
+   -- bug (keith)   Only show line segments buffer on a polyline with indiv segments
+   -- bug (keith)   Fix Advatek upload broken
+   -- bug (keith)   Update time display when waveform is clicked
+2023.06 April 10, 2023
+   -- enh (keith)   Add Guitar effect
+   -- enh (scott)   Add JSON endpoints getModel, getControllerPortMap, getShowFolder
+   -- enh (moc)     Add a bunch of improvements to Ripple
+   -- enh (moc)     Add a bunch of utilities to the submodels dialog
+   -- enh (kevin)   Add transformations - rotate & flip
+   -- bug (dkulp)   Upgrade wxWidgets on Linux to address GTK issues
+   -- bug (dkulp)   Update CURL calls to set Accept-Encoding to allow gzip/deflate to work for all
+   -- bug (dkulp)   Fix some discovery issues
+   -- bug (dkulp)   Fix FPP file manipulation on 6.3.3+
+   -- bug (dkulp)   Fix models not drawing in layout
+   -- bug (keith)   Fix compare between version numbers to work with subversions
+   -- bug (scratch) Fix some effects panel scroll bar
+   -- bug (moc)     Fix some value curves not resetting
+2023.05 March 27, 2023
+   -- enh (dkulp)  MacOS - Use Bonjour to help discover FPP instances
+   -- enh (dkulp)  FPPConnect - better support for FPP7 instances
+   -- enh (merryoncherry) Ability to press ENTER to save a submodel name
+   -- enh (scott)  Add Copy States to State Dialog
+   -- enh (Pierre.Beukes) Confirmation prompt when cancelling the Submodels creation dialog
+   -- enh (keith)  Add a text filter to the VUMeter timing track triggers to selectively react to timing track effects
+   -- bug (dkulp)  Z-Sort models before display to better handle transparency
+   -- bug (keith)  MP4 export requires at least 16x16
+2023.04 March 11, 2023
+   -- enh (keith)  Add "Build a Light Show" vendor to prop downloads
+   -- enh (dkulp)  Add new K64D-B and K8-Pi controllers
+   -- enh (keith)  Add CMY support to DMX moving heads
+   -- enh (keith)  Add ability to zoom to the selection in the sequencer tab
+   -- change (keith) Default ArtNet universes to 510 channels when discovered
+   -- bug (keith)  Audio does not stop when jukebox stops
+   -- bug (merryoncherry) Fix some threading issues with Text/Shape effects on Windows
+   -- bug (dkulp)  In some cases, the logs on MacOS could not be created.
+   -- bug (merryoncherry/dkulp) Fix some bad rendering with Warp effects
+   -- bug (merryoncherry) Fix bugs with compress/expand of node ranges in SubModel node selection
+   -- bug (merryoncherry) ValueCurves for Ripple Rotation were not working
+   -- bug (MrPierreB) Metronome timing tracks were not available for import
+   -- bug (scott)  Fix background image crash on Windows
+2023.03 February 22, 2023
+   -- enh (dkulp)  Add ability to create "FPP Command Preset" and "FPP Effects" timing tracks and save that in fseq files (FPP 7)
+   -- enh (dkulp)  Add FPPConnect upload of fseq/media to FPP7
+   -- enh (keith)  Change jukebox to play the sequence looped for the effect duration rather than just selecting the effect
+   -- enh (merryoncherry) New 5x5 Font for text effect
+   -- bug (merryoncherry) Fix icons for Import Effects panel not matching model
+   -- bug (merryoncherry) Fix save icon remaining pink if saving linked network/models
+   -- bug (keith)  Overlap checks does not always identify model
+   -- bug (scott)  Fix crash when switching from player
+   -- bug (scott)  Allow Serial Outputs On Virtual Matrix
+   -- bug (keith)  Fix crash when setting smart remote type on a port with no models.
+   -- bug (scott)  Fix F##v4 upload
+2023.02 February 01, 2023
+   -- enh (scott)  Add "dark mode" for Windows
+   -- enh (lutz)   Add Effect Duration to the variables available to shaders
+   -- enh (dkulp)  Allow xcontroller variants to specify which "ConfigDriver" they need.  Not based soley on vendor.
+   -- enh (keith)  Fix #3687 add optional frameMS and view parameters to xlDo newsequence
+   -- enh (scott)  Add Wally's WB48
+   -- enh (dkulp)  Add Warning about potential removal of OpenGL 1.x/2.x
+   -- enh (dkulp)  Add Warning about potential removal of Windows 7 support
+   -- enh (dkulp)  Add Warning about potential removal of FPP <6 support
+   -- bug (dkulp)  Fix Twinkly output on M1 Macs
+   -- bug (keith)  Fix crash when dropping sketch effect
+   -- bug (scott)  Hopefully fix IP/Host Validation
+   -- bug (dkulp)  Fix duplication of media dirs if flip back/forth of tabs in preferences panel
+   -- bug (dkulp)  Fix DDP packet data type to match spec
+   -- bug (dkulp)  Prevent visualizer from opening up if Output to lights is on (prevents some crashes)
+2023.01 January 05, 2023
+   -- enh (dkulp)  Speed up aborting of rendering so UI tasks can complete quicker
+   -- bug (dkulp)  Fix Aborted rendering not marking ranges as "Dirty" so they render properly later
+   -- bug (dkulp)  Fix some crashes with resizing/moving effects and timing marks
+   -- enh (dkulp)  Update to latest wxWidgets+patches so Scott can play with Dark Mode on Windows
 2022.26 December 29, 2022
    -- enh (scott)  Added ability to duplicate or "tile" an effect
    -- bug (dkulp)  macOS - Fix some issues in SubModel dialog where everythingn will grey out after deleting a submodel

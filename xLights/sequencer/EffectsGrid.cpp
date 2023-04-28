@@ -73,6 +73,7 @@ const long EffectsGrid::ID_GRID_MNU_COPY = wxNewId();
 const long EffectsGrid::ID_GRID_MNU_PASTE = wxNewId();
 const long EffectsGrid::ID_GRID_MNU_DELETE = wxNewId();
 const long EffectsGrid::ID_GRID_MNU_RANDOM_EFFECTS = wxNewId();
+const long EffectsGrid::ID_GRID_MNU_RESETEFFECT = wxNewId();
 const long EffectsGrid::ID_GRID_MNU_DESCRIPTION = wxNewId();
 const long EffectsGrid::ID_GRID_MNU_LOCK = wxNewId();
 const long EffectsGrid::ID_GRID_MNU_UNLOCK = wxNewId();
@@ -238,6 +239,15 @@ EffectLayer* EffectsGrid::FindOpenLayer(Element* elem, int startTimeMS, int endT
     return layer;
 }
 
+void EffectsGrid::PlayLoopedEffect(Effect* eff, bool loop = false)
+{
+    ((MainSequencer*)mParent)->PanelWaveForm->SetSelectedInterval(eff->GetStartTimeMS(), eff->GetEndTimeMS());
+    Draw();
+
+    wxCommandEvent playEvent(loop ? EVT_SEQUENCE_REPLAY_SECTION : EVT_PLAY_SEQUENCE);
+    wxPostEvent(mParent, playEvent);
+}
+
 void EffectsGrid::mouseLeftDClick(wxMouseEvent& event)
 {
     int update_time = -1;
@@ -304,14 +314,14 @@ void EffectsGrid::mouseLeftDClick(wxMouseEvent& event)
                 }
             }
         } else {
-            // we have double clicked on an effect - highlight that part of the waveform
-            ((MainSequencer*)mParent)->PanelWaveForm->SetSelectedInterval(selectedEffect->GetStartTimeMS(), selectedEffect->GetEndTimeMS());
-            Draw();
             // and play it play mode is active
             if (mTimingPlayOnDClick) {
-                wxCommandEvent playEvent(EVT_PLAY_SEQUENCE);
-                wxPostEvent(mParent, playEvent);
+                PlayLoopedEffect(selectedEffect);
             } else {
+                // we have double clicked on an effect - highlight that part of the waveform
+                ((MainSequencer*)mParent)->PanelWaveForm->SetSelectedInterval(selectedEffect->GetStartTimeMS(), selectedEffect->GetEndTimeMS());
+                Draw();
+
                 if (update_time > -1) {
                     UpdateTimePosition(update_time);
                 }
@@ -369,7 +379,7 @@ void EffectsGrid::rightClick(wxMouseEvent& event)
         }
 
         wxMenuItem* menu_duplicate = mnuLayer.Append(ID_GRID_MNU_DUPLICATE_EFFECT, "Duplicate");
-        if (mSelectedEffect == nullptr || (mSelectedEffect->GetEndTimeMS() - mSelectedEffect->GetStartTimeMS() <= mSequenceElements->GetFrameMS())) {
+        if (mSelectedEffect == nullptr ) {
             menu_duplicate->Enable(false);
         }
 
@@ -418,6 +428,7 @@ void EffectsGrid::rightClick(wxMouseEvent& event)
             menu_random->Enable(false);
         }
 
+        wxMenuItem* menu_effect_reseteffect = mnuLayer.Append(ID_GRID_MNU_RESETEFFECT, "Reset Effect");
         wxMenuItem* menu_effect_description = mnuLayer.Append(ID_GRID_MNU_DESCRIPTION, "Description");
         wxMenuItem* menu_effect_lock = mnuLayer.Append(ID_GRID_MNU_LOCK, "Lock");
         wxMenuItem* menu_effect_unlock = mnuLayer.Append(ID_GRID_MNU_UNLOCK, "Unlock");
@@ -429,6 +440,10 @@ void EffectsGrid::rightClick(wxMouseEvent& event)
             menu_effect_lock->Enable(false);
             menu_effect_renderdisable->Enable(false);
             menu_effect_renderenable->Enable(false);
+        }
+        if (mSelectedEffect == nullptr) {
+            // This only works on the currently selected effect
+            menu_effect_reseteffect->Enable(false);
         }
 
         if (ri->nodeIndex >= 0)             {
@@ -649,8 +664,10 @@ void EffectsGrid::OnGridPopup(wxCommandEvent& event)
     else if (id == ID_GRID_MNU_DELETE) {
         logger_base.debug("OnGridPopup - DELETE");
         DeleteSelectedEffects();
-    }
-    else if (id == ID_GRID_MNU_DESCRIPTION) {
+    } else if (id == ID_GRID_MNU_RESETEFFECT) {
+        logger_base.debug("OnGridPopup - RESETEFFECT");
+        ResetEffect();
+    } else if (id == ID_GRID_MNU_DESCRIPTION) {
         logger_base.debug("OnGridPopup - DESCRIPTION");
         SetEffectsDescription();
     }
@@ -3403,7 +3420,7 @@ void EffectsGrid::Resize(int position, bool offset, bool control)
 
     if (mSequenceElements == nullptr) return;
 
-    xlights->AbortRender();
+    if (!xlights->AbortRender()) return;
 
     int new_time = -1;
 
@@ -4077,6 +4094,20 @@ void EffectsGrid::DisableRenderEffects(bool disable)
             }
         }
     }
+}
+
+void EffectsGrid::ResetEffect()
+{
+    if (mSequenceElements == nullptr)
+        return;
+    if (mSelectedEffect == nullptr)
+        return;
+
+    mSequenceElements->get_undo_mgr().CreateUndoStep();
+
+    mSequenceElements->get_undo_mgr().CaptureModifiedEffect(mSelectedEffect->GetParentEffectLayer()->GetParentElement()->GetName(), mSelectedEffect->GetParentEffectLayer()->GetIndex(), mSelectedEffect);
+
+    mSequenceElements->GetXLightsFrame()->ResetPanelDefaultSettings(mSelectedEffect->GetEffectName(), nullptr, false);
 }
 
 void EffectsGrid::SetEffectsDescription()
@@ -6737,23 +6768,53 @@ void EffectsGrid::DuplicateSelectedEffects()
     DuplicateDialog dialog(mParent);
 
     if (dialog.ShowModal() == wxID_OK) {
-         if (mSelectedEffect != nullptr) {
-            long start = mSelectedEffect->GetStartTimeMS();
-            long end = mSelectedEffect->GetEndTimeMS();
-            long length = end - start;
+        if (mSelectedEffect != nullptr) {
+            bool paste_by_cell = ((MainSequencer*)mParent)->PasteByCellActive();
 
-            auto el = mSelectedEffect->GetParentEffectLayer();
-            long newstart = end;
-            for (int i = 0; i < dialog.GetCount(); ++i) {
-                newstart += (dialog.GetGap() * length);
-                newstart = mTimeline->RoundToMultipleOfPeriod(newstart, mSequenceElements->GetFrequency());
-                long newEnd = mTimeline->RoundToMultipleOfPeriod(newstart + length, mSequenceElements->GetFrequency());
-                if (!el->HasEffectsInTimeRange(newstart, newEnd)) {
-                    Effect* newef = el->AddEffect(0, xlights->GetEffectManager().GetEffectName(mSelectedEffect->GetEffectIndex()), mSelectedEffect->GetSettingsAsString(), mSelectedEffect->GetPaletteAsString(), newstart, newEnd, EFFECT_SELECTED, false);
-                    mSequenceElements->get_undo_mgr().CaptureAddedEffect(el->GetParentElement()->GetName(), el->GetIndex(), newef->GetID());
-                }                
-                newstart = newEnd;
-            }            
+            EffectLayer* tel{nullptr};
+            if (paste_by_cell) {
+                tel = mSequenceElements->GetVisibleEffectLayer(mSequenceElements->GetSelectedTimingRow());
+                if (tel == nullptr) {
+                    return;
+                }
+                long startCol = tel->GetEffectByTime(mSelectedEffect->GetStartTimeMS())->GetID() + 2;
+                if (mSelectedEffect->GetStartTimeMS() == 0) {//first timing mark in the zero column, and second timing mark has start column of 0 too
+                    startCol--;
+                }
+                auto el = mSelectedEffect->GetParentEffectLayer();
+                mSelectedEffect->GetEffectIndex();
+                for (int i = 0; i < dialog.GetCount(); ++i) {
+                    startCol += dialog.GetGap();
+                    Effect* eff = tel->GetEffect(startCol);
+                    if (nullptr != eff) {
+                        long newstart = mTimeline->RoundToMultipleOfPeriod(eff->GetStartTimeMS(), mSequenceElements->GetFrequency());
+                        long newEnd = mTimeline->RoundToMultipleOfPeriod(eff->GetEndTimeMS(), mSequenceElements->GetFrequency());
+                        if (!el->HasEffectsInTimeRange(newstart, newEnd)) {
+                            Effect* newef = el->AddEffect(0, xlights->GetEffectManager().GetEffectName(mSelectedEffect->GetEffectIndex()), mSelectedEffect->GetSettingsAsString(), mSelectedEffect->GetPaletteAsString(), newstart, newEnd, EFFECT_SELECTED, false);
+                            mSequenceElements->get_undo_mgr().CaptureAddedEffect(el->GetParentElement()->GetName(), el->GetIndex(), newef->GetID());
+                        }
+                    }
+                    startCol++;
+                }
+            }
+            else {
+                long start = mSelectedEffect->GetStartTimeMS();
+                long end = mSelectedEffect->GetEndTimeMS();
+                long length = end - start;
+
+                auto el = mSelectedEffect->GetParentEffectLayer();
+                long newstart = end;
+                for (int i = 0; i < dialog.GetCount(); ++i) {
+                    newstart += (dialog.GetGap() * length);
+                    newstart = mTimeline->RoundToMultipleOfPeriod(newstart, mSequenceElements->GetFrequency());
+                    long newEnd = mTimeline->RoundToMultipleOfPeriod(newstart + length, mSequenceElements->GetFrequency());
+                    if (!el->HasEffectsInTimeRange(newstart, newEnd)) {
+                        Effect* newef = el->AddEffect(0, xlights->GetEffectManager().GetEffectName(mSelectedEffect->GetEffectIndex()), mSelectedEffect->GetSettingsAsString(), mSelectedEffect->GetPaletteAsString(), newstart, newEnd, EFFECT_SELECTED, false);
+                        mSequenceElements->get_undo_mgr().CaptureAddedEffect(el->GetParentElement()->GetName(), el->GetIndex(), newef->GetID());
+                    }
+                    newstart = newEnd;
+                }
+            }
         }
     }
 }

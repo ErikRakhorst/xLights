@@ -132,7 +132,7 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions);WXDEBUG;__WXDEBUG__;__MSVC__;_CRT_SECURE_NO_WARNINGS;EXCLUDENETWORKUI;DISCOVERYONLY;$(DefineConstants);</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions);WXDEBUG;__WXDEBUG__;__MSVC__;_CRT_SECURE_NO_WARNINGS;EXCLUDENETWORKUI;DISCOVERYONLY;NOMINMAX;$(DefineConstants);</PreprocessorDefinitions>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <ExceptionHandling>Async</ExceptionHandling>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -181,7 +181,7 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions);__MSVC__;EXCLUDENETWORKUI;_CRT_SECURE_NO_WARNINGS;DISCOVERYONLY;$(DefineConstants)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions);__MSVC__;EXCLUDENETWORKUI;_CRT_SECURE_NO_WARNINGS;DISCOVERYONLY;NOMINMAX;$(DefineConstants)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <ExceptionHandling>Async</ExceptionHandling>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -245,6 +245,7 @@
     <ClCompile Include="..\xLights\SequenceData.cpp" />
     <ClCompile Include="..\xLights\TraceLog.cpp" />
     <ClCompile Include="..\xLights\UtilFunctions.cpp" />
+    <ClCompile Include="..\xLights\utils\Curl.cpp" />
     <ClCompile Include="..\xLights\utils\ip_utils.cpp" />
     <ClCompile Include="..\xLights\utils\string_utils.cpp" />
     <ClCompile Include="..\xLights\vamp-hostsdk\Files.cpp" />
@@ -496,6 +497,7 @@
     <ClInclude Include="..\xLights\SpecialOptions.h" />
     <ClInclude Include="..\xLights\TraceLog.h" />
     <ClInclude Include="..\xLights\UtilFunctions.h" />
+    <ClInclude Include="..\xLights\utils\Curl.h" />
     <ClInclude Include="..\xLights\utils\ip_utils.h" />
     <ClInclude Include="..\xLights\utils\string_utils.h" />
     <ClInclude Include="..\xLights\VideoReader.h" />
@@ -687,7 +689,6 @@
     <ClInclude Include="xScheduleMain.h" />
     <ClInclude Include="MatrixDialog.h" />
     <ClInclude Include="xSchedulePlugin.h" />
-    <ClInclude Include="xSMSDaemon\Curl.h" />
     <ClInclude Include="Xyzzy.h" />
   </ItemGroup>
   <ItemGroup>
