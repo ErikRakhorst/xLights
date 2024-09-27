@@ -171,15 +171,26 @@ void DDPOutput::SendSync(const std::string& localIP) {
 #ifndef EXCLUDENETWORKUI
 wxJSONValue DDPOutput::Query(const std::string& ip, uint8_t type, const std::string& localIP)
 {
+    uint8_t flags =  DDP_FLAGS1_VER1 | DDP_FLAGS1_QUERY;
+    return SendMessage(ip, type, flags, localIP, "");
+}
+
+wxJSONValue DDPOutput::SendMessage(const std::string& ip, uint8_t type, uint8_t flags, const std::string& localIP, const std::string& msg)
+{
     static log4cpp::Category& logger_base = log4cpp::Category::getInstance(std::string("log_base"));
 
     wxJSONValue val;
 
-    uint8_t packet[DDP_DISCOVERPACKET_LEN];
+    uint16_t msgLength = msg.length();
+    uint8_t packet[DDP_DISCOVERPACKET_LEN + msgLength];
     memset(&packet, 0x00, sizeof(packet));
 
-    packet[0] = DDP_FLAGS1_VER1 | DDP_FLAGS1_QUERY;
+    packet[0] = flags;
     packet[3] = type;
+    packet[8] = (msgLength & 0xFF00) >> 8;
+    packet[9] = msgLength & 0x00FF;
+
+    memcpy(&packet[10], msg.c_str() , msgLength);
 
     wxIPV4address localaddr;
     if (localIP == "") {
@@ -215,8 +226,8 @@ wxJSONValue DDPOutput::Query(const std::string& ip, uint8_t type, const std::str
 
     // bail if we dont have a datagram to use
     if (datagram != nullptr) {
-        logger_base.info("DDP sending query packet.");
-        datagram->SendTo(remoteaddr, &packet, DDP_DISCOVERPACKET_LEN);
+        logger_base.info("DDP sending messag.");
+        datagram->SendTo(remoteaddr, &packet, sizeof(packet));
         if (datagram->Error() != wxSOCKET_NOERROR) {
             logger_base.error("Error sending DDP query datagram => %d : %s.", datagram->LastError(), (const char*)DecodeIPError(datagram->LastError()).c_str());
         }
@@ -224,32 +235,32 @@ wxJSONValue DDPOutput::Query(const std::string& ip, uint8_t type, const std::str
             logger_base.info("DDP sent query packet. Sleeping for 1 second.");
 
             // give the controllers 2 seconds to respond
-            wxMilliSleep(1000);
+//            wxMilliSleep(1000);
 
-            uint8_t response[1024];
-
-            int lastread = 1;
-
-            while (lastread > 0) {
-                wxStopWatch sw;
-                logger_base.debug("Trying to read DDP query response packet.");
-                memset(&response, 0x00, sizeof(response));
-                datagram->Read(&response, sizeof(response));
-                lastread = datagram->LastReadCount();
-
-                if (lastread > 10) {
-                    logger_base.debug(" Read done. %d bytes %ldms", lastread, sw.Time());
-
-                    if (response[3] == type) {
-                        logger_base.debug(" Valid response.");
-                        logger_base.debug((const char*)&response[10]);
-
-                        wxJSONReader reader;
-                        reader.Parse(wxString(&response[10]), &val);
-                    }
-                }
-                logger_base.info("DDP Query Done looking for response.");
-            }
+//            uint8_t response[1024];
+//
+//            int lastread = 1;
+//
+//            while (lastread < 11) {
+//                wxStopWatch sw;
+//                logger_base.debug("Trying to read DDP query response packet.");
+//                memset(&response, 0x00, sizeof(response));
+//                datagram->Read(&response, sizeof(response));
+//                lastread = datagram->LastReadCount();
+//
+//                if (lastread > 10) {
+//                    logger_base.debug(" Read done. %d bytes %ldms", lastread, sw.Time());
+//
+//                    if (response[3] == type) {
+//                        logger_base.debug(" Valid response.");
+//                        logger_base.debug((const char*)&response[10]);
+//
+//                        wxJSONReader reader;
+//                        reader.Parse(wxString(&response[10]), &val);
+//                    }
+//                }
+//                logger_base.info("DDP Query Done looking for response.");
+//            }
         }
         datagram->Close();
         delete datagram;
@@ -273,6 +284,10 @@ void DDPOutput::PrepareDiscovery(Discovery &discovery) {
         if (response[3] == DDP_ID_STATUS) {
             logger_base.debug(" Valid DDP Status Response.");
             logger_base.debug((const char*)&response[10]);
+            wxJSONReader reader;
+            wxJSONValue parsed_response;
+            reader.Parse(wxString(&response[10]), &parsed_response);
+
 
             wxIPV4address add;
             socket->GetPeer(add);
@@ -324,6 +339,10 @@ void DDPOutput::PrepareDiscovery(Discovery &discovery) {
                     }
                     dd->description = name;
                     controller->SetDescription(name);
+                    if (val["status"].HasMember("nam")) {
+                        controller->SetName(val["status"]["nam"].AsString().ToStdString());
+
+                    }
                 }
             }
             uint8_t packet[DDP_DISCOVERPACKET_LEN];

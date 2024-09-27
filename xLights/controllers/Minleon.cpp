@@ -587,7 +587,7 @@ Minleon::Minleon(const std::string& ip, const std::string& proxy, const std::str
         logger_base.debug("   MAC: %s", (const char*)status["status"]["mac"].AsString().c_str());
 
         logger_base.debug("Getting minleon status.");
-        auto config = DDPOutput::Query(_ip, DDP_ID_CONFIG);
+        auto config = DDPOutput::Query(_ip, DDP_ID_CONFIG, forceLocalIP);
         _ports = config["config"]["ports"].AsArray()->Count();
         ParseStringPorts(_stringPorts, config["config"]["ports"]);
         logger_base.debug("Downloaded string data.");

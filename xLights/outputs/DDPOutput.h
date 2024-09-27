@@ -80,6 +80,7 @@ public:
 
     #ifndef EXCLUDEDISCOVERY
     static wxJSONValue Query(const std::string& ip, uint8_t type, const std::string& localIP);
+    static wxJSONValue SendMessage(const std::string& ip, uint8_t type, uint8_t flags, const std::string& localIP, const std::string& msg);
     static void PrepareDiscovery(Discovery& discovery);
     #endif
 
