@@ -33,8 +33,6 @@
 #include <wx/button.h>
 #include "Color.h"
 
-#define xlSetRetinaCanvasViewport(w,a,b,c,d)
-#define xlTranslateToRetina(a, x) x
 #define EnableSleepModes()
 #define DisableSleepModes()
 #define AddAudioDeviceChangeListener(a)
@@ -67,7 +65,8 @@ inline void GetAllFilesInDir(const wxString& dir, wxArrayString& files, const wx
 {
     wxDir::GetAllFiles(dir, &files, filespec, flags);
 }
-inline void SetButtonBackground(wxButton *b, const wxColour &c, int bgType) {
+inline void SetButtonBackground(wxButton* b, const wxColour& c, int bgType)
+{
     b->SetBackgroundColour(c);
     b->Refresh();
 }

@@ -25,11 +25,11 @@ SUDO		= `which sudo`
 
 SUBDIRS         = xLights xSchedule xCapture xFade xScanner xSchedule/xSMSDaemon xSchedule/RemoteFalcon
 
-WXWIDGETS_TAG=xlights_2023.06
+WXWIDGETS_TAG=xlights_2023.23b
 
 .NOTPARALLEL:
 
-all: wxwidgets31 log4cpp cbp2make linkliquid libxlsxwriter makefile subdirs
+all: wxwidgets33 log4cpp cbp2make linkliquid libxlsxwriter makefile subdirs
 
 #############################################################################
 
@@ -63,8 +63,8 @@ log4cpp: FORCE
 	@printf "Checking log4cpp\n"
 	@if test "`log4cpp-config --version`" != "1.1"; \
 		then if test ! -d log4cpp; \
-			then echo Downloading log4cpp; wget --no-verbose -c https://nchc.dl.sourceforge.net/project/log4cpp/log4cpp-1.1.x%20%28new%29/log4cpp-1.1/log4cpp-1.1.3.tar.gz; \
-			tar xfz log4cpp-1.1.3.tar.gz ;\
+			then echo Downloading log4cpp; wget --no-verbose -c https://nchc.dl.sourceforge.net/project/log4cpp/log4cpp-1.1.x%20%28new%29/log4cpp-1.1/log4cpp-1.1.4.tar.gz; \
+			tar xfz log4cpp-1.1.4.tar.gz ;\
 		fi; \
 		cd log4cpp; \
 		./configure --prefix=$(PREFIX); \
@@ -75,14 +75,14 @@ log4cpp: FORCE
 		echo Completed build/install of log4cpp; \
 		fi
 
-wxwidgets31: FORCE
+wxwidgets33: FORCE
 	@printf "Checking wxwidgets\n"
 	@if test "`wx-config --version`" != "3.3.0"; \
 		then if test ! -d wxWidgets-$(WXWIDGETS_TAG); \
 			then echo Downloading wxwidgets; git clone --depth=1 --shallow-submodules  --recurse-submodules -b $(WXWIDGETS_TAG) https://github.com/xLightsSequencer/wxWidgets wxWidgets-$(WXWIDGETS_TAG); \
 		fi; \
 		cd wxWidgets-$(WXWIDGETS_TAG); \
-		./configure --enable-cxx11 --with-cxx=17 --enable-std_containers --enable-std_string_conv_in_wxstring --enable-backtrace --enable-exceptions --enable-mediactrl --enable-graphics_ctx --enable-monolithic --disable-gtktest --disable-sdltest --with-gtk=3 --disable-glcanvasegl --disable-pcx --disable-iff --without-libtiff --prefix=$(PREFIX); \
+		./configure --enable-cxx11 --with-cxx=17 --enable-std_containers --enable-std_string_conv_in_wxstring --enable-backtrace --enable-exceptions --enable-mediactrl --enable-graphics_ctx --enable-monolithic --disable-sdltest --with-gtk=3 --disable-glcanvasegl --disable-pcx --disable-iff --without-libtiff --prefix=$(PREFIX); \
 		echo Building wxwidgets; \
 		${MAKE} -j 4 -s; \
 		echo Installing wxwidgets; \

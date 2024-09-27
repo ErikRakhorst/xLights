@@ -74,7 +74,9 @@ public:
         }
         return false;
     }
-
+    virtual void setPrioritizeGraphics(bool p) override {
+        MetalComputeUtilities::INSTANCE.prioritizeGraphics(p);
+    }
 
     bool isEnabled = true;
 };
@@ -91,6 +93,8 @@ RenderableEffect* CreateMetalEffect(EffectManager::RGB_EFFECTS_e eff) {
             return new MetalPlasmaEffect(eff);
         case EffectManager::eff_WARP:
             return new MetalWarpEffect(eff);
+        case EffectManager::eff_PINWHEEL:
+            return new MetalPinwheelEffect(eff);
         default:
             return nullptr;
         }

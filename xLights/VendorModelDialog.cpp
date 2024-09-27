@@ -28,8 +28,6 @@
 #include "UtilFunctions.h"
 #include "ExternalHooks.h"
 
-CachedFileDownloader VendorModelDialog::_cache;
-
 class MModel;
 
 class MModelWiring
@@ -800,9 +798,6 @@ VendorModelDialog::VendorModelDialog(wxWindow* parent, const std::string& showFo
 
     SetSize(800, 600);
 
-    static log4cpp::Category& logger_base = log4cpp::Category::getInstance(std::string("log_base"));
-    logger_base.debug("File cache size: %d", _cache.size());
-
     PopulateModelPanel((MModel*)nullptr);
     PopulateVendorPanel(nullptr);
 
@@ -854,6 +849,7 @@ wxXmlDocument* VendorModelDialog::GetXMLFromURL(wxURI url, std::string& filename
 bool VendorModelDialog::LoadTree(wxProgressDialog* prog, int low, int high)
 {
     const std::string vendorlink = "https://nutcracker123.com/xlights/vendors/xlights_vendors.xml";
+    const std::string vendorlinkbackup = "https://github.com/smeighan/xLights/raw/master/download/xlights_vendors.xml";
     //const std::string vendorlink = "http://localhost/xlights_vendors.xml";
 
     std::string filename;
@@ -862,8 +858,12 @@ bool VendorModelDialog::LoadTree(wxProgressDialog* prog, int low, int high)
     wxXmlDocument* vd = GetXMLFromURL(wxURI(vendorlink), filename, prog, low, high, true);
     if (prog != nullptr) 
         prog->Update(high, "Parsing vendor list");
-    if (vd != nullptr && vd->IsOk())
-    {
+
+    if (vd == nullptr || !vd->IsOk()) {
+        vd = GetXMLFromURL(wxURI(vendorlinkbackup), filename, prog, low, high, true);
+    }
+
+    if (vd != nullptr && vd->IsOk()) {
         wxXmlNode* root = vd->GetRoot();
 
         for (auto v = root->GetChildren(); v != nullptr; v = v->GetNext())
@@ -1033,10 +1033,9 @@ VendorModelDialog::~VendorModelDialog()
 	//(*Destroy(VendorModelDialog)
 	//*)
 
-    _cache.Save();
+    GetCache().Save();
 
-    for (const auto& it : _vendors)
-    {
+    for (const auto& it : _vendors) {
         delete it;
     }
 }

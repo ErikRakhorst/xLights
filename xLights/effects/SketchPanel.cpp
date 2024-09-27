@@ -25,7 +25,7 @@ namespace
     const char demoVideoURL2[] = "https://vimeo.com/698053599";
 
     const wxString imgSelect("Select an image file");
-    const wxString imgFilters("*.jpg;*.gif;*.png;*.bmp;*.jpeg");
+    const wxString imgFilters("*.jpg;*.gif;*.png;*.bmp;*.jpeg;*.webp");
 
     SketchAssistPanel* getSketchAssistPanel(wxWindow* win)
     {
@@ -184,7 +184,6 @@ SketchPanel::SketchPanel(wxWindow* parent, wxWindowID id /*=wxID_ANY*/, const wx
     settingsSizer->Add(TextCtrl_MotionPercentage, 1, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 
     mainSizer->Add(settingsSizer, 1, wxALL | wxEXPAND, 2);
-
 
 	SetSizer(mainSizer);
     mainSizer->Fit(this);

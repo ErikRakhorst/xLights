@@ -206,6 +206,7 @@ static int progressFunction(void* bar,
 
     return 0;
 }
+#ifdef _DEBUG
 static size_t headerFunction(char* buffer, size_t size, size_t nitems, void* userdata)
 {
     static log4cpp::Category& logger_base = log4cpp::Category::getInstance(std::string("log_base"));
@@ -214,7 +215,7 @@ static size_t headerFunction(char* buffer, size_t size, size_t nitems, void* use
     }
     return size * nitems;
 }
-
+#endif
 
 std::string Curl::HTTPSPost(const std::string& url, const wxString& body, const std::string& user, const std::string& password, const std::string& contentType, int timeout, const std::vector<std::pair<std::string, std::string>>& customHeaders, int* responseCode)
 {
@@ -636,7 +637,7 @@ struct HTTPFileUploadData {
     uint8_t* postData = nullptr;
     size_t postDataSize = 0;
 
-    wxProgressDialog* progress = nullptr;
+    std::function<bool(int, std::string)> progress = nullptr;
     std::string progressString;
     size_t totalWritten = 0;
     size_t lastDone = 0;
@@ -679,7 +680,7 @@ struct HTTPFileUploadData {
                 donePct /= file->Length();
                 if (donePct != lastDone) {
                     lastDone = donePct;
-                    cancelled = !progress->Update(donePct, progressString);
+                    cancelled = !progress(donePct, progressString);
                     wxYield();
                 }
             }
@@ -705,7 +706,7 @@ static size_t http_file_upload_callback(void* ptr, size_t size, size_t nmemb, vo
     return dt->readData(ptr, buffer_size);
 }
 
-bool Curl::HTTPUploadFile(const std::string& url, const std::string& filename, const std::string& file, wxProgressDialog* dlg, const std::string& username, const std::string& password)
+bool Curl::HTTPUploadFile(const std::string& url, const std::string& filename, const std::string& file, std::function<bool(int, std::string)> dlg, const std::string& username, const std::string& password)
 {
     static log4cpp::Category& logger_base = log4cpp::Category::getInstance(std::string("log_base"));
 
@@ -724,8 +725,8 @@ bool Curl::HTTPUploadFile(const std::string& url, const std::string& filename, c
 
     bool cancelled = false;
     logger_base.debug("Upload via http of %s to %s.", (const char*)filename.c_str(), (const char *)url.c_str());
-    dlg->SetTitle("HTTP Upload");
-    cancelled |= !dlg->Update(0, "Transferring " + wxFileName(file).GetFullName() + " to " + wxURL(url).GetServer());
+    //dlg->SetTitle("HTTP Upload");
+    cancelled |= !dlg(0, "Transferring " + wxFileName(file).GetFullName() + " to " + wxURL(url).GetServer());
     int lastDone = 0;
 
     CURL* curl = curl_easy_init();
@@ -733,13 +734,12 @@ bool Curl::HTTPUploadFile(const std::string& url, const std::string& filename, c
         cancelled = true;
     } else {
         std::string curlInputBuffer;
-        curl_easy_reset(curl);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeFunction);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &curlInputBuffer);
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 5000);
-        curl_easy_setopt(curl, CURLOPT_TCP_FASTOPEN, 1L);
         curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
+        curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 
 #ifdef __WXMSW__
         // Temporarily adding this in order to try to catch ongoing curl crashes
@@ -769,6 +769,8 @@ bool Curl::HTTPUploadFile(const std::string& url, const std::string& filename, c
         chunk = curl_slist_append(chunk, ctMime.c_str());
         chunk = curl_slist_append(chunk, "X-Requested-With: FPPConnect");
         chunk = curl_slist_append(chunk, "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36");
+        chunk = curl_slist_append(chunk, "Expect:");
+
         curl_easy_setopt(curl, CURLOPT_POST, 1L);
 
         wxMemoryBuffer memBuffPost;
@@ -826,7 +828,7 @@ bool Curl::HTTPUploadFile(const std::string& url, const std::string& filename, c
             logger_base.warn("Curl did not upload file:  %d -> %s   %s", response_code, (const char*)DecodeResponseCode(response_code).c_str(), error);
             cancelled = true;
         }
-        cancelled |= !dlg->Update(1000);
+        cancelled |= !dlg(1000, "");
         logger_base.info("HTTP File Upload file %s  - Return: %d - RC: %d -> %s - File: %s", url.c_str(), i, response_code, (const char*)DecodeResponseCode(response_code).c_str(), filename.c_str());
         res = !(data.cancelled || cancelled);
     }

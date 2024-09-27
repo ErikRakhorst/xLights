@@ -101,7 +101,35 @@ inline void AddSlowStorageWarning() {
 #endif
 
 #ifndef NO_ZSTD
+#ifndef LINUX
+//zstd on Debian 11 doesn't have the thread pool stuff
+#define ZSTD_STATIC_LINKING_ONLY
+#endif
 #include <zstd.h>
+#include <thread>
+
+#ifdef ZSTD_STATIC_LINKING_ONLY
+class ZSTDThreadPoolHolder {
+    struct POOL_ctx_s* pool = nullptr;
+public:
+    ZSTDThreadPoolHolder() {}
+    ~ZSTDThreadPoolHolder() {
+        if (pool) {
+            ZSTD_freeThreadPool(pool);
+        }
+    }
+    ZSTD_threadPool* getPool() {
+        if (pool == nullptr) {
+            pool = ZSTD_createThreadPool(std::thread::hardware_concurrency());
+        }
+        return pool;
+    }
+    
+    static ZSTDThreadPoolHolder INSTANCE;
+};
+ZSTDThreadPoolHolder ZSTDThreadPoolHolder::INSTANCE;
+#endif
+
 #endif
 #ifndef NO_ZLIB
 #include <zlib.h>
@@ -489,29 +517,30 @@ void FSEQFile::parseVariableHeaders(const std::vector<uint8_t>& header, int read
         } else if (readIndex + (dataLength - FSEQ_VARIABLE_HEADER_SIZE) > header.size()) {
             // ensure the data length is contained within the header
             // this is primarily protection against hand modified, or corrupted, sequence files
-            LogErr(VB_SEQUENCE, "VariableHeader '%c%c' has out of bounds data length: %d bytes, max length: %d bytes\n", header[readIndex], header[readIndex + 1], readIndex + VariableCodeSize + dataLength, header.size());
+            LogErr(VB_SEQUENCE, "VariableHeader '%c%c' has out of bounds data length: %d bytes, max length: %d bytes\n",
+                   code0, code1, readIndex + dataLength, header.size());
 
             // there is no reasonable way to recover from this error - the reported dataLength is longer than possible
             // return from parsing variable headers and let the program attempt to read the rest of the file
             return;
         } else {
             // log when reading unrecongized variable headers
-            if (!isRecognizedStringVariableHeader(header[readIndex], header[readIndex + 1])) {
-                if (!isRecognizedBinaryVariableHeader(header[readIndex], header[readIndex + 1])) {
-                    LogDebug(VB_SEQUENCE, "Unrecognized VariableHeader code: %c%c, length: %d bytes\n", header[readIndex], header[readIndex + 1], dataLength);
+            dataLength -= FSEQ_VARIABLE_HEADER_SIZE;
+            if (!isRecognizedStringVariableHeader(code0, code1)) {
+                if (!isRecognizedBinaryVariableHeader(code0, code1)) {
+                    LogDebug(VB_SEQUENCE, "Unrecognized VariableHeader code: %c%c, length: %d bytes\n", code0, code1, dataLength);
                 }
             } else {
                 // print a warning if the data is not null terminated
                 // this is to assist debugging potential string related issues
                 // the data is not forcibly null terminated to avoid mutating unknown data
-                if (header.size() < readIndex + VariableCodeSize + dataLength) {
+                if (header.size() < readIndex + dataLength) {
                     LogErr(VB_SEQUENCE, "VariableHeader %c%c data exceeds header buffer size!  %d > %d\n",
-                           header[readIndex], header[readIndex + 1], (readIndex + VariableCodeSize + dataLength), header.size());
-                } else if (header[readIndex + VariableCodeSize + dataLength - 1] != '\0') {
-                    LogErr(VB_SEQUENCE, "VariableHeader %c%c data is not NULL terminated!\n", header[readIndex], header[readIndex + 1]);
+                           code0, code1, (readIndex + dataLength), header.size());
+                } else if (header[readIndex + dataLength - 1] != '\0') {
+                    LogErr(VB_SEQUENCE, "VariableHeader %c%c data is not NULL terminated!\n", code0, code1);
                 }
             }
-            dataLength -= FSEQ_VARIABLE_HEADER_SIZE;
 
             vheader.data.resize(dataLength);
             memcpy(&vheader.data[0], &header[readIndex], dataLength);
@@ -670,6 +699,14 @@ public:
         return true;
     }
 
+    [[nodiscard]] virtual size_t GetSize() const override {
+        return m_size;
+    }
+
+    [[nodiscard]] virtual uint8_t* GetData() const override {
+        return m_data;
+    }
+
     uint32_t m_size;
     uint8_t* m_data;
     std::vector<std::pair<uint32_t, uint32_t>> m_ranges;
@@ -744,8 +781,8 @@ static const int V2FSEQ_HEADER_SIZE = 32;
 static const int V2FSEQ_SPARSE_RANGE_SIZE = 6;
 static const int V2FSEQ_COMPRESSION_BLOCK_SIZE = 8;
 #if !defined(NO_ZLIB) || !defined(NO_ZSTD)
-static const int V2FSEQ_OUT_BUFFER_SIZE = 1024 * 1024;          // 1MB output buffer
-static const int V2FSEQ_OUT_BUFFER_FLUSH_SIZE = 900 * 1024;     // 90% full, flush it
+static const int V2FSEQ_OUT_BUFFER_SIZE = 32 * 1024 * 1024;        // 32MB output buffer
+static const int V2FSEQ_OUT_BUFFER_FLUSH_SIZE = 16 * 1024 * 1024;  // 50% full, flush it
 static const int V2FSEQ_OUT_COMPRESSION_BLOCK_SIZE = 64 * 1024; // 64KB blocks
 #endif
 
@@ -881,7 +918,9 @@ public:
             return m_maxBlocks;
         }
         //determine a good number of compression blocks
-        uint64_t datasize = m_file->getChannelCount() * m_file->getNumFrames();
+        uint64_t datasize = m_file->getChannelCount();
+        uint64_t numFrames = m_file->getNumFrames();
+        datasize *= numFrames;
         uint64_t numBlocks = datasize / V2FSEQ_OUT_COMPRESSION_BLOCK_SIZE;
         if (numBlocks > maxNumBlocks) {
             //need a lot of blocks, use as many as we can
@@ -889,7 +928,7 @@ public:
         } else if (numBlocks < 1) {
             numBlocks = 1;
         }
-        m_framesPerBlock = m_file->getNumFrames() / numBlocks;
+        m_framesPerBlock = numFrames / numBlocks;
         if (m_framesPerBlock < 10)
             m_framesPerBlock = 10;
         m_curFrameInBlock = 0;
@@ -962,6 +1001,7 @@ public:
 #ifndef NO_ZSTD
 class V2ZSTDCompressionHandler : public V2CompressedHandler {
 public:
+    
     V2ZSTDCompressionHandler(V2FSEQFile* f) :
         V2CompressedHandler(f),
         m_cctx(nullptr),
@@ -1010,7 +1050,8 @@ public:
 
             uint64_t len = m_file->m_frameOffsets[m_curBlock + 1].second;
             len -= m_file->m_frameOffsets[m_curBlock].second;
-            uint64_t max = m_file->getNumFrames() * m_file->getChannelCount();
+            uint64_t max = m_file->getNumFrames();
+            max *= (uint64_t)m_file->getChannelCount();
             if (len > max) {
                 len = max;
             }
@@ -1098,7 +1139,7 @@ public:
         return data;
     }
     void compressData(ZSTD_CStream* m_cctx, ZSTD_inBuffer_s& input, ZSTD_outBuffer_s& output) {
-        ZSTD_compressStream(m_cctx, &output, &input);
+        ZSTD_compressStream2(m_cctx, &output, &input, ZSTD_e_continue);
         int count = input.pos;
         int total = input.size;
         uint8_t* curData = (uint8_t*)input.src;
@@ -1112,7 +1153,7 @@ public:
                 write(output.dst, output.pos);
                 output.pos = 0;
             }
-            ZSTD_compressStream(m_cctx, &output, &input);
+            ZSTD_compressStream2(m_cctx, &output, &input, ZSTD_e_continue);
             count += input.pos;
         }
     }
@@ -1140,6 +1181,14 @@ public:
                 clevel = 0;
             }
             ZSTD_initCStream(m_cctx, clevel);
+            //ZSTD_CCtx_reset(m_cctx, ZSTD_reset_session_only);
+            //ZSTD_CCtx_refCDict(m_cctx, NULL);
+            //ZSTD_CCtx_setParameter(m_cctx, ZSTD_c_compressionLevel, clevel);
+
+#ifdef ZSTD_STATIC_LINKING_ONLY
+            ZSTD_CCtx_setParameter(m_cctx, ZSTD_c_nbWorkers, std::thread::hardware_concurrency());
+            ZSTD_CCtx_refThreadPool(m_cctx, ZSTDThreadPoolHolder::INSTANCE.getPool());
+#endif
         }
 
         uint8_t* curData = (uint8_t*)data;
@@ -1172,7 +1221,10 @@ public:
         //we'll start a new block.  We want the first block to be small so startup is
         //quicker and we can get the first few frames as fast as possible.
         if ((m_curBlock == 0 && m_curFrameInBlock == 10) || (m_curFrameInBlock >= m_framesPerBlock && m_file->m_frameOffsets.size() < m_maxBlocks)) {
-            while (ZSTD_endStream(m_cctx, &m_outBuffer) > 0) {
+            ZSTD_inBuffer_s input = {
+                0, 0, 0
+            };
+            while(ZSTD_compressStream2(m_cctx, &m_outBuffer, &input, ZSTD_e_end) > 0) {
                 write(m_outBuffer.dst, m_outBuffer.pos);
                 m_outBuffer.pos = 0;
             }
@@ -1185,7 +1237,10 @@ public:
     }
     virtual void finalize() override {
         if (m_curFrameInBlock) {
-            while (ZSTD_endStream(m_cctx, &m_outBuffer) > 0) {
+            ZSTD_inBuffer_s input = {
+                0, 0, 0
+            };
+            while(ZSTD_compressStream2(m_cctx, &m_outBuffer, &input, ZSTD_e_end) > 0) {
                 write(m_outBuffer.dst, m_outBuffer.pos);
                 m_outBuffer.pos = 0;
             }
@@ -1198,7 +1253,7 @@ public:
         V2CompressedHandler::finalize();
     }
 
-    ZSTD_CStream* m_cctx = nullptr;
+    ZSTD_CCtx* m_cctx = nullptr;
     ZSTD_DStream* m_dctx = nullptr;
     ZSTD_outBuffer_s m_outBuffer;
     ZSTD_inBuffer_s m_inBuffer;

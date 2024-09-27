@@ -72,7 +72,7 @@ class Falcon : public BaseController
     int V4_GetBoardPorts(int boardMode);
     int V4_GetMaxPortPixels(int boardMode, int protocol);
     int V4_EncodeInputProtocol(const std::string& protocol);
-    void V4_GetStartChannel(int modelUniverse, int modelUniverseStartChannel, unsigned long modelStartChannel, int& universe, unsigned long& startChannel);
+    void V4_GetStartChannel(int modelUniverse, int modelUniverseStartChannel, unsigned long modelStartChannel, int& universe, unsigned long& startChannel, bool oneBased, uint32_t controllerFirstChannel);
     int V4_EncodeColourOrder(const std::string co) const;
     int V4_GetStringFirstIndex(const std::vector<FALCON_V4_STRING>& falconStrings, const int p, const int sr);
     std::string V4_DecodePixelProtocol(int protocol);
@@ -101,7 +101,8 @@ class Falcon : public BaseController
     bool V4_ValidateWAV(const std::string& media);
 
 #ifndef DISCOVERYONLY
-    bool V4_PopulateStrings(std::vector<FALCON_V4_STRING>& uploadStrings, const std::vector<FALCON_V4_STRING>& falconStrings, UDController& cud, ControllerCaps* caps, int defaultBrightness, std::string& error);
+    int V4_GetBrightness(int port, int sr, int defaultBrightness, const std::vector<FALCON_V4_STRING>& falconStrings);
+    bool V4_PopulateStrings(std::vector<FALCON_V4_STRING>& uploadStrings, const std::vector<FALCON_V4_STRING>& falconStrings, UDController& cud, ControllerCaps* caps, int defaultBrightness, std::string& error, bool oneBased, uint32_t firstControllerChannel, bool fullcontrol);
     void V4_MakeStringsValid(Controller* controlle, UDController& cud, std::vector<FALCON_V4_STRING>& falconStrings, int addressingMode);
 #endif
 
@@ -198,7 +199,7 @@ public:
     virtual bool SetInputUniverses(Controller* controller, wxWindow* parent) override;
     virtual bool SetOutputs(ModelManager* allmodels, OutputManager* outputManager, Controller* controller, wxWindow* parent) override;
     virtual bool UploadForImmediateOutput(ModelManager* allmodels, OutputManager* outputManager, Controller* controller, wxWindow* parent) override;
-    bool UploadSequence(const std::string& seq, const std::string& file, const std::string& media, wxProgressDialog* progress);
+    bool UploadSequence(const std::string& seq, const std::string& file, const std::string& media, std::function<bool(int, std::string)> progress);
     #endif
     
     std::string GetName() const { return _name; }

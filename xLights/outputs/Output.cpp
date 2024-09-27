@@ -55,19 +55,19 @@ void Output::Save(wxXmlNode* node) {
 #pragma endregion
 
 #pragma region Constructors and Destructors
-Output::Output(Output* output) {
+Output::Output(const Output& from) {
     _ok = true;
-    _dirty = output->IsDirty();
-    _channels = output->GetChannels();
-    _startChannel = output->GetStartChannel();
-    _suppressDuplicateFrames = output->IsSuppressDuplicateFrames();
-    _description_CONVERT = output->GetDescription_CONVERT();
-    _autoSize_CONVERT = output->IsAutoSize_CONVERT();
-    _forceLocalIP = output->GetForceLocalIP();
-    _fppProxy = output->GetFPPProxyIP();
-    _globalFPPProxy = output->_globalFPPProxy;
-    _globalForceLocalIP = output->_globalForceLocalIP;
-    _enabled = output->IsEnabled();
+    _dirty = from.IsDirty();
+    _channels = from.GetChannels();
+    _startChannel = from.GetStartChannel();
+    _suppressDuplicateFrames = from.IsSuppressDuplicateFrames();
+    _description_CONVERT = from.GetDescription_CONVERT();
+    _autoSize_CONVERT = from.IsAutoSize_CONVERT();
+    _forceLocalIP = from.GetForceLocalIP();
+    _fppProxy = from.GetFPPProxyIP();
+    _globalFPPProxy = from._globalFPPProxy;
+    _globalForceLocalIP = from._globalForceLocalIP;
+    _enabled = from.IsEnabled();
 }
 
 Output::Output(wxXmlNode* node) {
@@ -112,7 +112,7 @@ Output* Output::Create(Controller* c, wxXmlNode* node, std::string showDir) {
     if (type.EndsWith(" Ethernet") && type[0] == 'S' && type[1] == 'y') { type = OUTPUT_xxxETHERNET; }
 
     if (type == OUTPUT_E131) {
-        return new E131Output(node, c->IsActive());
+        return new E131Output(node, c && c->IsActive());
     }
     else if (type == OUTPUT_ZCPP) {
         return new ZCPPOutput(c, node, showDir);
@@ -121,13 +121,13 @@ Output* Output::Create(Controller* c, wxXmlNode* node, std::string showDir) {
         return new NullOutput(node);
     }
     else if (type == OUTPUT_ARTNET) {
-        return new ArtNetOutput(node, c->IsActive());
+        return new ArtNetOutput(node, c && c->IsActive());
     }
     else if (type == OUTPUT_KINET) {
-        return new KinetOutput(node, c->IsActive());
+        return new KinetOutput(node, c && c->IsActive());
     }
     else if (type == OUTPUT_DDP) {
-        return new DDPOutput(node, c->IsActive());
+        return new DDPOutput(node, c && c->IsActive());
     }
     else if (type == OUTPUT_DMX) {
         return new DMXOutput(node);
@@ -136,7 +136,7 @@ Output* Output::Create(Controller* c, wxXmlNode* node, std::string showDir) {
         return new xxxSerialOutput(node);
     }
     else if (type == OUTPUT_OPC) {
-        return new OPCOutput(node, c->IsActive());
+        return new OPCOutput(node, c && c->IsActive());
     }
     else if (type == OUTPUT_PIXELNET) {
         return new PixelNetOutput(node);
@@ -163,9 +163,9 @@ Output* Output::Create(Controller* c, wxXmlNode* node, std::string showDir) {
         return new GenericSerialOutput(node);
     }
     else if (type == OUTPUT_xxxETHERNET) {
-        return new xxxEthernetOutput(node, c->IsActive());
+        return new xxxEthernetOutput(node, c && c->IsActive());
     } else if (type == OUTPUT_TWINKLY) {
-        return new TwinklyOutput(node, c->IsActive());
+        return new TwinklyOutput(node, c && c->IsActive());
     }
 
     logger_base.warn("Unknown network type %s ignored.", (const char *)type.c_str());

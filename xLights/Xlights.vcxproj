@@ -130,9 +130,9 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions);WXDEBUG;__WXDEBUG__;_CRT_SECURE_NO_WARNINGS;IGNORE_VENDORS;$(DefineConstants);</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions);WXDEBUG;__WXDEBUG__;_CRT_SECURE_NO_WARNINGS;IGNORE_VENDORS;$(DefineConstants);wxUSE_WEBP</PreprocessorDefinitions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalOptions>/D "NOMINMAX"</AdditionalOptions>
       <ExceptionHandling>Async</ExceptionHandling>
     </ClCompile>
@@ -146,6 +146,17 @@
       <AdditionalManifestFiles>xLightsApp64.manifest %(AdditionalManifestFiles)</AdditionalManifestFiles>
       <EnableDpiAwareness>true</EnableDpiAwareness>
     </Manifest>
+    <PostBuildEvent>
+      <Command>copy "$(SolutionDir)..\bin\*.dll" "$(TargetDir)"
+copy "$(SolutionDir)..\bin64\*.dll" "$(TargetDir)"
+copy "$(SolutionDir)..\bin\*.cfg" "$(TargetDir)"
+copy "$(SolutionDir)..\bin\xlights.windows.properties" "$(TargetDir)"
+copy "$(SolutionDir)..\bin\*_dictionary" "$(TargetDir)"
+copy "$(SolutionDir)..\bin\phoneme_mapping" "$(TargetDir)"
+xcopy "$(SolutionDir)..\bin64\Vamp\" "$(TargetDir)Vamp\" /e /y /i /r
+
+</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -203,6 +214,16 @@
     <ManifestResourceCompile>
       <ResourceOutputFileName>$(IntDir)$(TargetName)$(TargetExt).embed.manifest.res</ResourceOutputFileName>
     </ManifestResourceCompile>
+    <PostBuildEvent>
+      <Command>copy "$(SolutionDir)..\bin\*.dll" "$(TargetDir)"
+copy "$(SolutionDir)..\bin64\*.dll" "$(TargetDir)"
+copy "$(SolutionDir)..\bin\*.cfg" "$(TargetDir)"
+copy "$(SolutionDir)..\bin\xlights.windows.properties" "$(TargetDir)"
+copy "$(SolutionDir)..\bin\*_dictionary" "$(TargetDir)"
+copy "$(SolutionDir)..\bin\phoneme_mapping" "$(TargetDir)"
+xcopy "$(SolutionDir)..\bin64\Vamp\" "$(TargetDir)Vamp\" /e /y /i /r
+</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\common\xlBaseApp.cpp" />
@@ -222,6 +243,7 @@
     <ClCompile Include="..\xSchedule\wxJSON\jsonwriter.cpp" />
     <ClCompile Include="AboutDialog.cpp" />
     <ClCompile Include="AlignmentDialog.cpp" />
+    <ClCompile Include="AutoLabelDialog.cpp" />
     <ClCompile Include="automation\automation.cpp" />
     <ClCompile Include="automation\LuaRunner.cpp" />
     <ClCompile Include="automation\PythonRunner.cpp" />
@@ -254,6 +276,7 @@
     <ClCompile Include="controllers\Falcon.cpp" />
     <ClCompile Include="controllers\FPP.cpp" />
     <ClCompile Include="controllers\FPPConnectDialog.cpp" />
+    <ClCompile Include="controllers\FPPUploadProgressDialog.cpp" />
     <ClCompile Include="controllers\HinksPix.cpp" />
     <ClCompile Include="controllers\HinksPixExportDialog.cpp" />
     <ClCompile Include="controllers\J1Sys.cpp" />
@@ -269,7 +292,12 @@
     <ClCompile Include="DragColoursBitmapButton.cpp" />
     <ClCompile Include="DragValueCurveBitmapButton.cpp" />
     <ClCompile Include="DuplicateDialog.cpp" />
+    <ClCompile Include="EditAliasesDialog.cpp" />
+    <ClCompile Include="effects\AdjustEffect.cpp" />
+    <ClCompile Include="effects\AdjustPanel.cpp" />
     <ClCompile Include="effects\assist\SketchAssistPanel.cpp" />
+    <ClCompile Include="effects\DuplicateEffect.cpp" />
+    <ClCompile Include="effects\DuplicatePanel.cpp" />
     <ClCompile Include="effects\FX.cpp" />
     <ClCompile Include="effects\GuitarEffect.cpp" />
     <ClCompile Include="effects\GuitarPanel.cpp" />
@@ -303,18 +331,18 @@
     <ClCompile Include="GenerateLyricsDialog.cpp" />
     <ClCompile Include="GPURenderUtils.cpp" />
     <ClCompile Include="graphics\opengl\DrawGLUtils.cpp" />
-    <ClCompile Include="graphics\opengl\DrawGLUtils31.cpp" />
-    <ClCompile Include="graphics\opengl\Image.cpp" />
-    <ClCompile Include="graphics\opengl\Image_Loader.cpp" />
     <ClCompile Include="graphics\opengl\xlGLCanvas.cpp" />
-    <ClCompile Include="graphics\opengl\XlightsDrawable.cpp" />
+    <ClCompile Include="graphics\opengl\xlOGL3GraphicsContext.cpp" />
     <ClCompile Include="graphics\xlFontInfo.cpp" />
     <ClCompile Include="graphics\xlGraphicsAccumulators.cpp" />
     <ClCompile Include="graphics\xlMesh.cpp" />
     <ClCompile Include="HousePreviewPanel.cpp" />
     <ClCompile Include="ImportPreviewsModelsDialog.cpp" />
     <ClCompile Include="IPEntryDialog.cpp" />
+    <ClCompile Include="MetronomeLabelDialog.cpp" />
     <ClCompile Include="models\DMX\DmxColorAbilityCMY.cpp" />
+    <ClCompile Include="TempFileManager.cpp" />
+    <ClCompile Include="utils\CurlManager.cpp" />
     <ClCompile Include="utils\ip_utils.cpp" />
     <ClCompile Include="utils\Curl.cpp" />
     <ClCompile Include="JukeboxPanel.cpp" />
@@ -683,9 +711,11 @@
     <ClCompile Include="WiringDialog.cpp" />
     <ClCompile Include="wxCheckedListCtrl.cpp" />
     <ClCompile Include="wxModelGridCellRenderer.cpp" />
+    <ClCompile Include="wxWEBPHandler\imagwebp.cpp" />
     <ClCompile Include="xlColorCanvas.cpp" />
     <ClCompile Include="xlColorPicker.cpp" />
     <ClCompile Include="xlColorPickerFields.cpp" />
+    <ClCompile Include="xlColourData.cpp" />
     <ClCompile Include="xlGridCanvas.cpp" />
     <ClCompile Include="xLightsApp.cpp" />
     <ClCompile Include="xLightsImportChannelMapDialog.cpp" />
@@ -707,6 +737,7 @@
     <ClInclude Include="..\xSchedule\wxHTTPServer\wxhttpserver.h" />
     <ClInclude Include="AboutDialog.h" />
     <ClInclude Include="AlignmentDialog.h" />
+    <ClInclude Include="AutoLabelDialog.h" />
     <ClInclude Include="automation\automation.h" />
     <ClInclude Include="automation\LuaRunner.h" />
     <ClInclude Include="automation\PythonRunner.h" />
@@ -739,6 +770,7 @@
     <ClInclude Include="controllers\Falcon.h" />
     <ClInclude Include="controllers\FPP.h" />
     <ClInclude Include="controllers\FPPConnectDialog.h" />
+    <ClInclude Include="controllers\FPPUploadProgressDialog.h" />
     <ClInclude Include="controllers\HinksPix.h" />
     <ClInclude Include="controllers\HinksPixExportDialog.h" />
     <ClInclude Include="controllers\J1Sys.h" />
@@ -753,12 +785,17 @@
     <ClInclude Include="DragColoursBitmapButton.h" />
     <ClInclude Include="DragValueCurveBitmapButton.h" />
     <ClInclude Include="DuplicateDialog.h" />
+    <ClInclude Include="EditAliasesDialog.h" />
+    <ClInclude Include="effects\AdjustEffect.h" />
+    <ClInclude Include="effects\AdjustPanel.h" />
     <ClInclude Include="effects\assist\AssistPanel.h" />
     <ClInclude Include="effects\assist\PicturesAssistPanel.h" />
     <ClInclude Include="effects\assist\SketchAssistPanel.h" />
     <ClInclude Include="effects\assist\xlGridCanvasEmpty.h" />
     <ClInclude Include="effects\assist\xlGridCanvasMorph.h" />
     <ClInclude Include="effects\assist\xlGridCanvasPictures.h" />
+    <ClInclude Include="effects\DuplicateEffect.h" />
+    <ClInclude Include="effects\DuplicatePanel.h" />
     <ClInclude Include="effects\FX.h" />
     <ClInclude Include="effects\GuitarEffect.h" />
     <ClInclude Include="effects\GuitarPanel.h" />
@@ -784,10 +821,10 @@
     <ClInclude Include="FSEQFile.h" />
     <ClInclude Include="GenerateLyricsDialog.h" />
     <ClInclude Include="graphics\opengl\DrawGLUtils.h" />
-    <ClInclude Include="graphics\opengl\Image.h" />
-    <ClInclude Include="graphics\opengl\Image_Loader.h" />
+    <ClInclude Include="graphics\opengl\GL\glext.h" />
     <ClInclude Include="graphics\opengl\xlGLCanvas.h" />
     <ClInclude Include="graphics\opengl\XlightsDrawable.h" />
+    <ClInclude Include="graphics\opengl\xlOGL3GraphicsContext.h" />
     <ClInclude Include="graphics\tiny_obj_loader.h" />
     <ClInclude Include="graphics\xlFontInfo.h" />
     <ClInclude Include="graphics\xlGraphicsAccumulators.h" />
@@ -796,7 +833,10 @@
     <ClInclude Include="graphics\xlMesh.h" />
     <ClInclude Include="HousePreviewPanel.h" />
     <ClInclude Include="ImportPreviewsModelsDialog.h" />
+    <ClInclude Include="MetronomeLabelDialog.h" />
     <ClInclude Include="models\DMX\DmxColorAbilityCMY.h" />
+    <ClInclude Include="TempFileManager.h" />
+    <ClInclude Include="utils\CurlManager.h" />
     <ClInclude Include="utils\ip_utils.h" />
     <ClInclude Include="utils\Curl.h" />
     <ClInclude Include="LayoutUtils.h" />
@@ -1171,9 +1211,11 @@
     <ClInclude Include="WiringDialog.h" />
     <ClInclude Include="wxCheckedListCtrl.h" />
     <ClInclude Include="wxModelGridCellRenderer.h" />
+    <ClInclude Include="wxWEBPHandler\imagwebp.h" />
     <ClInclude Include="xlColorCanvas.h" />
     <ClInclude Include="xlColorPicker.h" />
     <ClInclude Include="xlColorPickerFields.h" />
+    <ClInclude Include="xlColourData.h" />
     <ClInclude Include="xlCustomControl.h" />
     <ClInclude Include="xlGridCanvas.h" />
     <ClInclude Include="xLightsApp.h" />

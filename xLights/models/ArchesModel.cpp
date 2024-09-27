@@ -27,6 +27,7 @@ ArchesModel::ArchesModel(wxXmlNode *node, const ModelManager &manager, bool zero
 {
     screenLocation.SetModelHandleHeight(true);
     screenLocation.SetSupportsAngle(true);
+    screenLocation.SetPreferredSelectionPlane(ModelScreenLocation::MSLPLANE::GROUND);
     SetFromXml(node, zeroBased);
 }
 
@@ -121,9 +122,7 @@ int ArchesModel::OnPropertyGridChange(wxPropertyGridInterface* grid, wxPropertyG
         AddASAPWork(OutputModelManager::WORK_CALCULATE_START_CHANNELS, "ArchesModel::OnPropertyGridChange::ArchesCount");
         AddASAPWork(OutputModelManager::WORK_MODELS_REWORK_STARTCHANNELS, "ArchesModel::OnPropertyGridChange::ArchesCount");
         AddASAPWork(OutputModelManager::WORK_UPDATE_PROPERTYGRID, "ArchesModel::OnPropertyGridChange::ArchesCount");
-        if (ModelXml->GetAttribute("Advanced", "0") == "1") {
-            AddASAPWork(OutputModelManager::WORK_RELOAD_PROPERTYGRID, "ArchesModel::OnPropertyGridChange::ArchesCount");
-        }
+        AddASAPWork(OutputModelManager::WORK_RELOAD_PROPERTYGRID, "ArchesModel::OnPropertyGridChange::ArchesCount");
         return 0;
     } else if ("ArchesNodes" == event.GetPropertyName()) {
         ModelXml->DeleteAttribute("parm2");

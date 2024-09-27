@@ -226,6 +226,36 @@ void RenderBuffer::AlphaBlend(const RenderBuffer& src)
 
 inline double DegToRad(double deg) { return (deg * M_PI) / 180.0; }
 
+// MoC - March 2023
+// The wx font map is not thread safe in some cases, effects using
+//   it from background threads need to mutex each other (and ideally
+//   the event loop thread but meh.  This is not the best place (WX
+//   would be a better place), but this is better than no place.
+//
+// The first step here was centralizing the access methods, putting a
+//   lock around them then became possible.
+//   Per dkulp, we could, in the future, pre-populate the cache from the
+//   main thread, or we could use CallAfter or similar to do the font
+//   lookup on the main thread, which may be incrementally better than
+//   just a lock shared between background threads.
+std::mutex FONT_MAP_LOCK;
+
+std::map<std::string, wxFontInfo> FONT_MAP_TXT;
+std::map<std::string, wxFontInfo> FONT_MAP_SHP;
+
+class FontMapLock
+{
+    std::unique_lock<std::mutex> lk;
+
+public:
+    FontMapLock() :
+        lk(FONT_MAP_LOCK)
+    {}
+
+    ~FontMapLock()
+    {}
+};
+
 DrawingContext::DrawingContext(int BufferWi, int BufferHt, bool allowShared, bool alpha) : nullBitmap(wxNullBitmap)
 {
     gc = nullptr;
@@ -244,6 +274,7 @@ DrawingContext::DrawingContext(int BufferWi, int BufferHt, bool allowShared, boo
     dc = new wxMemoryDC(*bitmap);
 
     if (!allowShared) {
+        FontMapLock lk;
         //make sure we UnShare everything that is being held onto
         //also use "non-normal" defaults to avoid "==" issue that
         //would keep it from using the non-shared versions
@@ -303,35 +334,6 @@ PathDrawingContext::PathDrawingContext(int BufferWi, int BufferHt, bool allowSha
 
 PathDrawingContext::~PathDrawingContext() {}
 
-// MoC - March 2023
-// The wx font map is not thread safe in some cases, effects using
-//   it from background threads need to mutex each other (and ideally
-//   the event loop thread but meh.  This is not the best place (WX
-//   would be a better place), but this is better than no place.
-//
-// The first step here was centralizing the access methods, putting a
-//   lock around them then became possible.  
-//   Per dkulp, we could, in the future, pre-populate the cache from the
-//   main thread, or we could use CallAfter or similar to do the font
-//   lookup on the main thread, which may be incrementally better than
-//   just a lock shared between background threads.
-std::mutex FONT_MAP_LOCK;
-
-std::map<std::string, wxFontInfo> FONT_MAP_TXT;
-std::map<std::string, wxFontInfo> FONT_MAP_SHP;
-
-class FontMapLock
-{
-    std::unique_lock<std::mutex> lk;
-
-public:
-    FontMapLock() :
-        lk(FONT_MAP_LOCK)
-    {}
-
-    ~FontMapLock()
-    {}
-};
 
 
 TextDrawingContext::TextDrawingContext(int BufferWi, int BufferHt, bool allowShared)
@@ -406,11 +408,6 @@ void DrawingContext::Clear()
         if (AllowAlphaChannel()) {
             image->SetAlpha();
             memset(image->GetAlpha(), wxIMAGE_ALPHA_TRANSPARENT, image->GetWidth() * image->GetHeight());
-            for (wxCoord x = 0; x < image->GetWidth(); x++) {
-                for (wxCoord y = 0; y < image->GetHeight(); y++) {
-                    image->SetAlpha(x, y, wxIMAGE_ALPHA_TRANSPARENT);
-                }
-            }
             bitmap = new wxBitmap(*image, 32);
         }
         else {
@@ -543,6 +540,7 @@ void PathDrawingContext::FillPath(wxGraphicsPath& path, wxPolygonFillMode fillSt
 
 void TextDrawingContext::SetFont(const wxFontInfo& font, const xlColor& color)
 {
+    FontMapLock lk;
     if (gc != nullptr) {
         int style = wxFONTFLAG_NOT_ANTIALIASED;
         if (font.GetWeight() == wxFONTWEIGHT_BOLD) {
@@ -607,7 +605,6 @@ void TextDrawingContext::SetFont(const wxFontInfo& font, const xlColor& color)
          lf.lfPitchAndFamily,
          lf.lfFaceName);*/
         {
-            FontMapLock lk;
             wxString s = f.GetNativeFontInfoDesc();
             s.Replace(";2;", ";3;", false);
             f.SetNativeFontInfo(s);
@@ -733,7 +730,6 @@ RenderBuffer::RenderBuffer(xLightsFrame *f) : frame(f)
     frameTimeInMs = 50;
     _textDrawingContext = nullptr;
     _pathDrawingContext = nullptr;
-    tempInt = tempInt2 = 0;
     isTransformed = false;
 }
 
@@ -1023,16 +1019,16 @@ void RenderBuffer::SetPixel(int x, int y, const xlColor &color, bool wrap, bool 
             xlColor pold = pixels[y*BufferWi + x];
 
             xlColor c;
-            int r = pnew.red + pold.red * (255 - pnew.alpha) / 255;
+            int r = pnew.red + (pold.red * (255 - pnew.alpha)) / 255;
             if (r > 255) r = 255;
             c.red = r;
-            int g = pnew.green + pold.green * (255 - pnew.alpha) / 255;
+            int g = pnew.green + (pold.green * (255 - pnew.alpha)) / 255;
             if (g > 255) g = 255;
             c.green = g;
-            int b = pnew.blue + pold.blue * (255 - pnew.alpha) / 255;
+            int b = pnew.blue + (pold.blue * (255 - pnew.alpha)) / 255;
             if (b > 255) b = 255;
             c.blue = b;
-            int a = pnew.alpha + pold.alpha * (255 - pnew.alpha) / 255;
+            int a = pnew.alpha + (pold.alpha * (255 - pnew.alpha)) / 255;
             if (a > 255) a = 255;
             c.alpha = a;
 
@@ -1144,7 +1140,7 @@ void RenderBuffer::DrawVLine(int x, int ystart, int yend, const xlColor &color, 
         SetPixel(x, y, color, wrap);
     }
 }
-void RenderBuffer::DrawBox(int x1, int y1, int x2, int y2, const xlColor& color, bool wrap) {
+void RenderBuffer::DrawBox(int x1, int y1, int x2, int y2, const xlColor& color, bool wrap, bool useAlpha) {
     if (y1 > y2) {
         int i = y1;
         y1 = y2;
@@ -1157,7 +1153,7 @@ void RenderBuffer::DrawBox(int x1, int y1, int x2, int y2, const xlColor& color,
     }
     for (int x = x1; x <= x2; x++) {
         for (int y = y1; y <= y2; y++) {
-            SetPixel(x, y, color, wrap);
+            SetPixel(x, y, color, wrap, useAlpha);
         }
     }
 }
@@ -1720,8 +1716,6 @@ RenderBuffer::RenderBuffer(RenderBuffer& buffer) : pixelVector(buffer.pixels, &b
     fadeinsteps = buffer.fadeinsteps;
     fadeoutsteps = buffer.fadeoutsteps;
     needToInit = buffer.needToInit;
-    tempInt = buffer.tempInt;
-    tempInt2 = buffer.tempInt2;
     allowAlpha = buffer.allowAlpha;
     dmx_buffer = buffer.dmx_buffer;
     _nodeBuffer = buffer._nodeBuffer;

@@ -1095,6 +1095,8 @@ static std::map<std::string, MixTypes> MixTypesMap = {
     { "Shadow 2 on 1", MixTypes::Mix_Shadow_2on1 },
     { "Layered", MixTypes::Mix_Layered },
     { "Normal", MixTypes::Mix_Normal },
+    { "Highlight", MixTypes::Mix_Highlight },
+    { "Highlight Vibrant", MixTypes::Mix_Highlight_Vibrant },
     { "Additive", MixTypes::Mix_Additive },
     { "Subtractive", MixTypes::Mix_Subtractive },
     { "Brightness", MixTypes::Mix_AsBrightness },
@@ -1328,6 +1330,35 @@ void PixelBufferClass::mixColors(const wxCoord &x, const wxCoord &y, xlColor &fg
         bg = hsv1.value > effectMixThreshold ? bg : fg; // if effect 2 is non black
         break;
     }
+    case MixTypes::Mix_Highlight:
+    {
+        bool effect1HasColor = (fg.red > 0 || fg.green > 0 || fg.blue > 0);
+        bool effect2HasColor = (bg.red > 0 || bg.green > 0 || bg.blue > 0);
+        HSVValue hsv1 = bg.asHSV();
+
+        if (effect1HasColor && (effect2HasColor || hsv1.value > effectMixThreshold)) {
+            bg = fg;
+        }
+    } break;
+    case MixTypes::Mix_Highlight_Vibrant:
+    {
+        HSVValue hsv1 = bg.asHSV();
+        if (hsv1.value > effectMixThreshold) {
+            
+            int r = fg.red + bg.red;
+            int g = fg.green + bg.green;
+            int b = fg.blue + bg.blue;
+
+            if (r > 255)
+                r = 255;
+            if (g > 255)
+                g = 255;
+            if (b > 255)
+                b = 255;
+
+            bg.Set(r, g, b);
+        }
+    } break;
     case MixTypes::Mix_Additive:
         {
             int r = fg.red + bg.red;
@@ -2840,9 +2871,10 @@ void PixelBufferClass::RotoZoom(LayerInfo* layer, float offset)
     if (layer->XRotationValueCurve.IsActive()) {
         settings.xrotation = layer->XRotationValueCurve.GetOutputValueAt(offset, layer->buffer.GetStartTimeMS(), layer->buffer.GetEndTimeMS());
     }
+    settings.xpivot = layer->xpivot;
+    settings.ypivot = layer->ypivot;
     if (settings.xrotation != 0 && settings.xrotation != 360) {
         GPURenderUtils::waitForRenderCompletion(&layer->buffer);
-        settings.xpivot = layer->xpivot;
         if (layer->XPivotValueCurve.IsActive()) {
             settings.xpivot = layer->XPivotValueCurve.GetOutputValueAt(offset, layer->buffer.GetStartTimeMS(), layer->buffer.GetEndTimeMS());
         }
@@ -2852,7 +2884,6 @@ void PixelBufferClass::RotoZoom(LayerInfo* layer, float offset)
         settings.yrotation = layer->YRotationValueCurve.GetOutputValueAt(offset, layer->buffer.GetStartTimeMS(), layer->buffer.GetEndTimeMS());
     }
     if (settings.yrotation != 0 && settings.yrotation != 360) {
-        settings.ypivot = layer->ypivot;
         if (layer->YPivotValueCurve.IsActive()) {
             settings.ypivot = layer->YPivotValueCurve.GetOutputValueAt(offset, layer->buffer.GetStartTimeMS(), layer->buffer.GetEndTimeMS());
         }
@@ -2891,22 +2922,27 @@ void PixelBufferClass::RotoZoom(LayerInfo* layer, float offset)
     if (layer->PivotPointYValueCurve.IsActive()) {
         settings.pivotpointy = layer->PivotPointYValueCurve.GetOutputValueAt(offset, layer->buffer.GetStartTimeMS(), layer->buffer.GetEndTimeMS());
     }
+    bool willDoRZ = (settings.xrotation != 0 && settings.xrotation != 360);
+    willDoRZ |= (settings.yrotation != 0 && settings.yrotation != 360);
+    willDoRZ |= (settings.zrotation != 0.0 || settings.zoom != 1.0);
     
-    if (!GPURenderUtils::RotoZoom(&layer->buffer, settings)) {
-        for (auto &c : layer->rotationorder) {
-            switch(c) {
-            case 'X':
-                RotateX(layer->buffer, settings);
-                break;
-            case 'Y':
-                RotateY(layer->buffer, settings);
-                break;
-            case 'Z':
-                RotateZAndZoom(layer->buffer, settings);
-                break;
+    if (willDoRZ) {
+        if (!GPURenderUtils::RotoZoom(&layer->buffer, settings)) {
+            for (auto &c : layer->rotationorder) {
+                switch(c) {
+                case 'X':
+                    RotateX(layer->buffer, settings);
+                    break;
+                case 'Y':
+                    RotateY(layer->buffer, settings);
+                    break;
+                case 'Z':
+                    RotateZAndZoom(layer->buffer, settings);
+                    break;
+                }
             }
         }
-    }
+    }    
 }
 
 bool PixelBufferClass::IsVariableSubBuffer(int layer) const

@@ -32,6 +32,8 @@
 #include <wx/numdlg.h>
 #include <wx/tokenzr.h>
 
+#include <algorithm>
+
 #include "SubModelsDialog.h"
 #include "models/Model.h"
 #include "SubBufferPanel.h"
@@ -48,6 +50,7 @@
 #include "xLightsVersion.h"
 #include "models/SubModel.h"
 #include "CheckboxSelectDialog.h"
+#include "TempFileManager.h"
 
 #include <log4cpp/Category.hh>
 
@@ -86,12 +89,14 @@ const long SubModelsDialog::ID_NOTEBOOK1 = wxNewId();
 const long SubModelsDialog::ID_PANEL5 = wxNewId();
 const long SubModelsDialog::ID_PANEL1 = wxNewId();
 const long SubModelsDialog::ID_SPLITTERWINDOW1 = wxNewId();
+const long SubModelsDialog::ID_STATICTEXT3 = wxNewId();
 //*)
 const long SubModelsDialog::ID_TIMER1 = wxNewId();
 
 const long SubModelsDialog::SUBMODEL_DIALOG_IMPORT_MODEL = wxNewId();
 const long SubModelsDialog::SUBMODEL_DIALOG_IMPORT_FILE = wxNewId();
 const long SubModelsDialog::SUBMODEL_DIALOG_IMPORT_CUSTOM = wxNewId();
+const long SubModelsDialog::SUBMODEL_DIALOG_IMPORT_CSV = wxNewId();
 const long SubModelsDialog::SUBMODEL_DIALOG_EXPORT_CSV = wxNewId();
 const long SubModelsDialog::SUBMODEL_DIALOG_EXPORT_XMODEL = wxNewId();
 const long SubModelsDialog::SUBMODEL_DIALOG_EXPORT_TOOTHERS = wxNewId();
@@ -120,6 +125,8 @@ const long SubModelsDialog::SUBMODEL_DIALOG_EXPAND_STRANDS_ALL = wxNewId();
 const long SubModelsDialog::SUBMODEL_DIALOG_COMPRESS_STRANDS_ALL = wxNewId();
 const long SubModelsDialog::SUBMODEL_DIALOG_BLANKS_AS_ZERO = wxNewId();
 const long SubModelsDialog::SUBMODEL_DIALOG_BLANKS_AS_EMPTY = wxNewId();
+const long SubModelsDialog::SUBMODEL_DIALOG_REMOVE_BLANKS_ZEROS = wxNewId();
+
 
 BEGIN_EVENT_TABLE(SubModelsDialog,wxDialog)
 	//(*EventTable(SubModelsDialog)
@@ -179,6 +186,7 @@ SubModelsDialog::SubModelsDialog(wxWindow* parent, OutputManager* om) :
 	//(*Initialize(SubModelsDialog)
 	wxBoxSizer* BoxSizer1;
 	wxFlexGridSizer* FlexGridSizer10;
+	wxFlexGridSizer* FlexGridSizer11;
 	wxFlexGridSizer* FlexGridSizer1;
 	wxFlexGridSizer* FlexGridSizer2;
 	wxFlexGridSizer* FlexGridSizer3;
@@ -237,7 +245,6 @@ SubModelsDialog::SubModelsDialog(wxWindow* parent, OutputManager* om) :
 	FlexGridSizer9->SetSizeHints(Panel2);
 	FlexGridSizer2->Add(Panel2, 0, wxEXPAND, 0);
 	SplitterWindow1 = new wxSplitterWindow(this, ID_SPLITTERWINDOW1, wxDefaultPosition, wxDefaultSize, wxSP_3D, _T("ID_SPLITTERWINDOW1"));
-	SplitterWindow1->SetMinimumPaneSize(100);
 	SplitterWindow1->SetSashGravity(0.5);
 	Panel3 = new wxPanel(SplitterWindow1, ID_PANEL5, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL, _T("ID_PANEL5"));
 	FlexGridSizer3 = new wxFlexGridSizer(0, 1, 0, 0);
@@ -329,11 +336,17 @@ SubModelsDialog::SubModelsDialog(wxWindow* parent, OutputManager* om) :
 	SplitterWindow1->SplitVertically(Panel3, ModelPreviewPanelLocation);
 	FlexGridSizer2->Add(SplitterWindow1, 1, wxALL|wxEXPAND, 5);
 	FlexGridSizer1->Add(FlexGridSizer2, 1, wxALL|wxEXPAND, 0);
+	FlexGridSizer11 = new wxFlexGridSizer(0, 3, 0, 0);
+	FlexGridSizer11->AddGrowableCol(1);
+	FlexGridSizer11->Add(-1,-1,1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
 	StdDialogButtonSizer1 = new wxStdDialogButtonSizer();
 	StdDialogButtonSizer1->AddButton(new wxButton(this, wxID_OK, wxEmptyString));
 	StdDialogButtonSizer1->AddButton(new wxButton(this, wxID_CANCEL, wxEmptyString));
 	StdDialogButtonSizer1->Realize();
-	FlexGridSizer1->Add(StdDialogButtonSizer1, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+	FlexGridSizer11->Add(StdDialogButtonSizer1, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+	NodeNumberText = new wxStaticText(this, ID_STATICTEXT3, wxEmptyString, wxDefaultPosition, wxDLG_UNIT(this,wxSize(50,-1)), 0, _T("ID_STATICTEXT3"));
+	FlexGridSizer11->Add(NodeNumberText, 1, wxALL|wxALIGN_RIGHT|wxALIGN_CENTER_VERTICAL, 5);
+	FlexGridSizer1->Add(FlexGridSizer11, 2, wxALL|wxEXPAND, 5);
 	SetSizer(FlexGridSizer1);
 	SetSizer(FlexGridSizer1);
 	Layout();
@@ -793,6 +806,7 @@ void SubModelsDialog::OnButtonImportClick(wxCommandEvent& event)
     if (_isMatrix) {
         mnu.Append(SUBMODEL_DIALOG_IMPORT_CUSTOM, "Import Custom Model Overlay");
     }
+    mnu.Append(SUBMODEL_DIALOG_IMPORT_CSV, "Import CSV as SubModel");
     mnu.Connect(wxEVT_MENU, (wxObjectEventFunction)& SubModelsDialog::OnImportBtnPopup, nullptr, this);
     PopupMenu(&mnu);
     event.Skip();
@@ -835,6 +849,11 @@ void SubModelsDialog::OnImportBtnPopup(wxCommandEvent& event)
         wxString filename = wxFileSelector(_("Choose Model file"), wxEmptyString, wxEmptyString, wxEmptyString, "xModel Files (*.xmodel)|*.xmodel", wxFD_OPEN);
         if (filename.IsEmpty()) return;
         ImportCustomModel(filename);
+    }
+    else if (event.GetId() == SUBMODEL_DIALOG_IMPORT_CSV) {
+        wxString filename = wxFileSelector(_("Choose CSV file"), wxEmptyString, wxEmptyString, wxEmptyString, "CSV Files (*.csv)|*.csv", wxFD_OPEN);
+        if (filename.IsEmpty()) return;
+        ImportCSVSubModel(filename);
     }
 }
 
@@ -1013,6 +1032,7 @@ void SubModelsDialog::OnNodesGridCellRightClick(wxGridEvent& event)
     mnu.Append(SUBMODEL_DIALOG_COMPRESS_STRANDS_ALL, "Compress All Strands");
     mnu.Append(SUBMODEL_DIALOG_BLANKS_AS_ZERO, "Convert Blanks To Zeros");
     mnu.Append(SUBMODEL_DIALOG_BLANKS_AS_EMPTY, "Convert Zeros To Empty");
+    mnu.Append(SUBMODEL_DIALOG_REMOVE_BLANKS_ZEROS, "Remove Blanks/Zeros");
 
     mnu.Connect(wxEVT_MENU, (wxObjectEventFunction)&SubModelsDialog::OnNodesGridPopup, nullptr, this);
     PopupMenu(&mnu);
@@ -1023,46 +1043,46 @@ void SubModelsDialog::OnNodesGridPopup(wxCommandEvent& event)
     if (event.GetId() == SUBMODEL_DIALOG_REMOVE_DUPLICATE) {
         RemoveDuplicates(false);
     }
-    if (event.GetId() == SUBMODEL_DIALOG_SUPPRESS_DUPLICATE) {
+    else if (event.GetId() == SUBMODEL_DIALOG_SUPPRESS_DUPLICATE) {
         RemoveDuplicates(true);
     }
-    if (event.GetId() == SUBMODEL_DIALOG_REMOVE_ALL_DUPLICATE_LR) {
+    else if (event.GetId() == SUBMODEL_DIALOG_REMOVE_ALL_DUPLICATE_LR) {
         RemoveAllDuplicates(true, false);
     }
-    if (event.GetId() == SUBMODEL_DIALOG_REMOVE_ALL_DUPLICATE_TB) {
+    else if (event.GetId() == SUBMODEL_DIALOG_REMOVE_ALL_DUPLICATE_TB) {
         RemoveAllDuplicates(false, false);
     }
-    if (event.GetId() == SUBMODEL_DIALOG_SUPPRESS_ALL_DUPLICATE_LR) {
+    else if (event.GetId() == SUBMODEL_DIALOG_SUPPRESS_ALL_DUPLICATE_LR) {
         RemoveAllDuplicates(true, true);
     }
-    if (event.GetId() == SUBMODEL_DIALOG_SUPPRESS_ALL_DUPLICATE_TB) {
+    else if (event.GetId() == SUBMODEL_DIALOG_SUPPRESS_ALL_DUPLICATE_TB) {
         RemoveAllDuplicates(false, true);
     }
-    if (event.GetId() == SUBMODEL_DIALOG_EVEN_ROWS) {
+    else if (event.GetId() == SUBMODEL_DIALOG_EVEN_ROWS) {
         MakeRowsUniform();
     }
-    if (event.GetId() == SUBMODEL_DIALOG_PIVOT_ROWS_COLUMNS) {
+    else if (event.GetId() == SUBMODEL_DIALOG_PIVOT_ROWS_COLUMNS) {
         PivotRowsColumns();
     }
-    if (event.GetId() == SUBMODEL_DIALOG_SYMMETRIZE) {
+    else if (event.GetId() == SUBMODEL_DIALOG_SYMMETRIZE) {
         Symmetrize();
     }
-    if (event.GetId() == SUBMODEL_DIALOG_SORT_POINTS) {
+    else if (event.GetId() == SUBMODEL_DIALOG_SORT_POINTS) {
         OrderPoints(false);
     }
-    if (event.GetId() == SUBMODEL_DIALOG_SORT_POINTS_ALL) {
+    else if (event.GetId() == SUBMODEL_DIALOG_SORT_POINTS_ALL) {
         OrderPoints(true);
     }
-    if (event.GetId() == SUBMODEL_DIALOG_COMBINE_STRANDS) {
+    else if (event.GetId() == SUBMODEL_DIALOG_COMBINE_STRANDS) {
         CombineStrands();
     }
-    if (event.GetId() == SUBMODEL_DIALOG_EXPAND_STRANDS_ALL) {
+    else if (event.GetId() == SUBMODEL_DIALOG_EXPAND_STRANDS_ALL) {
         processAllStrands([](wxString str) { return ExpandNodes(str); });
     }
-    if (event.GetId() == SUBMODEL_DIALOG_COMPRESS_STRANDS_ALL) {
+    else if (event.GetId() == SUBMODEL_DIALOG_COMPRESS_STRANDS_ALL) {
         processAllStrands([](wxString str) { return CompressNodes(str); });
     }
-    if (event.GetId() == SUBMODEL_DIALOG_BLANKS_AS_ZERO) {
+    else if (event.GetId() == SUBMODEL_DIALOG_BLANKS_AS_ZERO) {
         processAllStrands([](wxString str) {
             auto ns = wxSplit(str, ',');
             for (auto i = ns.begin(); i != ns.end(); ++i) {
@@ -1072,13 +1092,23 @@ void SubModelsDialog::OnNodesGridPopup(wxCommandEvent& event)
             return wxJoin(ns, ',');
         });
     }
-    if (event.GetId() == SUBMODEL_DIALOG_BLANKS_AS_EMPTY) {
+    else if (event.GetId() == SUBMODEL_DIALOG_BLANKS_AS_EMPTY) {
         processAllStrands([](wxString str) {
             auto ns = wxSplit(str, ',');
             for (auto i = ns.begin(); i != ns.end(); ++i) {
                 if (*i == "0")
                     *i = "";
             }
+            return wxJoin(ns, ',');
+        });
+    } else if (event.GetId() == SUBMODEL_DIALOG_REMOVE_BLANKS_ZEROS) {
+        processAllStrands([](wxString str) {
+            auto ns = wxSplit(str, ',');
+            ns.erase(std::remove_if(ns.begin(), ns.end(),
+                                    [](wxString& v) {
+                                        return (v == "0" || v == "");
+                                    }),
+                     ns.end());
             return wxJoin(ns, ',');
         });
     }
@@ -3016,6 +3046,11 @@ void SubModelsDialog::OnPreviewMouseMove(wxMouseEvent& event)
         m_bound_end_y = ray_origin.y;
         RenderModel();
     }
+    wxString tt = modelPreview->GetToolTipText();
+    if (tt != "") {
+        tt = "Node: " + tt;
+    }
+    NodeNumberText->SetLabel(tt);
 }
 
 void SubModelsDialog::RenderModel()
@@ -3300,6 +3335,44 @@ void SubModelsDialog::ImportSubModelXML(wxXmlNode* xmlData)
         }
         PopulateList();
         ValidateWindow();
+    }
+}
+
+void SubModelsDialog::ImportCSVSubModel(wxString const& filename)
+{
+    wxString name = GetSelectedName();
+    if (name.empty()) {
+        return;
+    }
+    SubModelInfo* sm = GetSubModelInfo(name);
+
+    wxTextFile f(filename);
+    if (f.Open()) {
+        std::list<std::string> reverse_lines;
+        wxString l = f.GetFirstLine();
+        while (!f.Eof()) {
+            if (!l.empty()) {
+                reverse_lines.push_front(CompressNodes(l));
+            }
+            l = f.GetNextLine();
+        }
+        f.Close();
+
+        sm->strands.resize(reverse_lines.size());
+        int i {0};
+        for (auto const& line : reverse_lines) {
+            sm->strands[i] = line;
+            i++;
+        }
+        ValidateWindow();
+        Select(name);
+
+        Panel3->SetFocus();
+        TextCtrl_Name->SetFocus();
+        TextCtrl_Name->SelectAll();
+    } else {
+        log4cpp::Category &logger_base = log4cpp::Category::getInstance(std::string("log_base"));
+        logger_base.warn("Failed to Open File %s", (const char *)filename.c_str());
     }
 }
 

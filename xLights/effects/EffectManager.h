@@ -23,6 +23,7 @@ public:
     enum RGB_EFFECTS_e {
         eff_OFF,
         eff_ON,
+        eff_ADJUST,
         eff_BARS,
         eff_BUTTERFLY,
         eff_CANDLE,
@@ -30,6 +31,7 @@ public:
         eff_COLORWASH,
         eff_CURTAIN,
         eff_DMX,
+        eff_DUPLICATE,
         eff_FACES,
         eff_FAN,
         eff_FILL,

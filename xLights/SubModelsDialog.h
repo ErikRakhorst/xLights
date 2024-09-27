@@ -171,6 +171,7 @@ public:
     wxPanel* SubBufferPanelHolder;
     wxSearchCtrl* SearchCtrl1;
     wxSplitterWindow* SplitterWindow1;
+    wxStaticText* NodeNumberText;
     wxStaticText* StaticText1;
     wxStaticText* StaticText2;
     wxStaticText* StaticTextName;
@@ -212,12 +213,14 @@ protected:
     static const long ID_PANEL5;
     static const long ID_PANEL1;
     static const long ID_SPLITTERWINDOW1;
+    static const long ID_STATICTEXT3;
     //*)
     static const long ID_TIMER1;
 
     static const long SUBMODEL_DIALOG_IMPORT_MODEL;
     static const long SUBMODEL_DIALOG_IMPORT_FILE;
     static const long SUBMODEL_DIALOG_IMPORT_CUSTOM;
+    static const long SUBMODEL_DIALOG_IMPORT_CSV;
     static const long SUBMODEL_DIALOG_EXPORT_CSV;
     static const long SUBMODEL_DIALOG_EXPORT_XMODEL;
     static const long SUBMODEL_DIALOG_EXPORT_TOOTHERS;
@@ -246,6 +249,7 @@ protected:
     static const long SUBMODEL_DIALOG_COMPRESS_STRANDS_ALL;
     static const long SUBMODEL_DIALOG_BLANKS_AS_ZERO;
     static const long SUBMODEL_DIALOG_BLANKS_AS_EMPTY;
+    static const long SUBMODEL_DIALOG_REMOVE_BLANKS_ZEROS;
 
     void SaveXML(Model* m);
     wxString GetSelectedName() const;
@@ -292,6 +296,7 @@ protected:
     void ImportSubModel(std::string filename);
     void ReadSubModelXML(wxXmlNode* xmlData);
     void ImportSubModelXML(wxXmlNode* xmlData);
+    void ImportCSVSubModel(wxString const& filename);
     wxArrayString getModelList(ModelManager* modelManager);
     void ExportSubModels(wxString const& filename);
     void ExportSubModelAsxModel(wxString const& filename, const std::string& name);

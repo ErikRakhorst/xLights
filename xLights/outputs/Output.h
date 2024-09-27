@@ -101,10 +101,11 @@ public:
 
     #pragma region Constructors and Destructors
     Output(wxXmlNode* node);
-    Output(Output* output);
+    Output(const Output& from);
     Output();
     virtual ~Output();
     virtual wxXmlNode* Save();
+    virtual Output* Copy() = 0;
     #pragma endregion 
 
     #pragma region Static Functions
@@ -221,16 +222,11 @@ public:
 
     #pragma region UI
     #ifndef EXCLUDENETWORKUI
-    virtual void AddProperties(wxPropertyGrid* propertyGrid, bool allSameSize, std::list<wxPGProperty*>& expandProperties) {}
-    virtual bool HandlePropertyEvent(wxPropertyGridEvent& event, OutputModelManager* outputModelManager) { return false; }
-    virtual void AddMultiProperties(wxPropertyGrid* propertyGrid, bool allSameSize, std::list<wxPGProperty*>& expandProperties)
-    {}
-    virtual bool HandleMultiPropertyEvent(wxPropertyGridEvent& event, OutputModelManager* outputModelManager)
-    {
-        return false;
-    }
-    virtual void HandleExpanded(wxPropertyGridEvent& event, bool expanded)
-    {}
+    virtual void UpdateProperties(wxPropertyGrid* propertyGrid, Controller* c, ModelManager* modelManager, std::list<wxPGProperty*>& expandProperties) {}
+    virtual void AddProperties(wxPropertyGrid* propertyGrid, wxPGProperty *before, Controller* c, bool allSameSize, std::list<wxPGProperty*>& expandProperties) { }
+    virtual void RemoveProperties(wxPropertyGrid* propertyGrid) {}
+    virtual bool HandlePropertyEvent(wxPropertyGridEvent& event, OutputModelManager* outputModelManager, Controller* c) { return false; }
+    virtual void HandleExpanded(wxPropertyGridEvent& event, bool expanded) {}
     #endif
     #pragma endregion UI
 };
