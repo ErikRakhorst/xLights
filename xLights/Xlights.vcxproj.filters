@@ -808,6 +808,9 @@
     <ClCompile Include="controllers\Minleon.cpp">
       <Filter>Controllers</Filter>
     </ClCompile>
+    <ClCompile Include="controllers\ProPixeler.cpp">
+      <Filter>Controllers</Filter>
+    </ClCompile>
     <ClCompile Include="outputs\GenericSerialOutput.cpp">
       <Filter>Outputs</Filter>
     </ClCompile>
@@ -1858,6 +1861,9 @@
       <Filter>Outputs</Filter>
     </ClInclude>
     <ClInclude Include="controllers\Minleon.h">
+      <Filter>Controllers</Filter>
+    </ClInclude>
+    <ClInclude Include="controllers\ProPixeler.h">
       <Filter>Controllers</Filter>
     </ClInclude>
     <ClInclude Include="outputs\GenericSerialOutput.h">

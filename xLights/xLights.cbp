@@ -841,6 +841,8 @@
 		<Unit filename="controllers/J1Sys.h" />
 		<Unit filename="controllers/Minleon.cpp" />
 		<Unit filename="controllers/Minleon.h" />
+		<Unit filename="controllers/ProPixeler.cpp" />
+		<Unit filename="controllers/ProPixeler.h" />
 		<Unit filename="controllers/Pixlite16.cpp" />
 		<Unit filename="controllers/Pixlite16.h" />
 		<Unit filename="controllers/SanDevices.cpp" />
