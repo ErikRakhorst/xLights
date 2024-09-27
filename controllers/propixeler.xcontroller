@@ -1,0 +1,27 @@
+<Vendor Name="ProPixeler">
+	<Controller Name="PPC4">
+		<Variant Name="">
+			<SupportsUpload/>
+			<SupportsPixelPortGrouping/>
+			<SupportsPixelPortDirection/>
+			<SupportsPixelPortColourOrder/>
+			<MaxInputUniverses>16</MaxInputUniverses>
+			<MaxPixelPort>4</MaxPixelPort>
+			<MaxSerialPort>0</MaxSerialPort>
+			<MaxSerialPortChannels>0</MaxSerialPortChannels>
+			<MaxPixelPortChannels>3069</MaxPixelPortChannels>
+			<AllInputUniversesMustBeSameSize/>
+			<UniversesMustBeSequential/>
+			<MaxInputUniverseChannels>512</MaxInputUniverseChannels>
+			<MinInputUniverseChannels>512</MinInputUniverseChannels>
+			<PixelProtocols>
+				<Protocol>ws2811</Protocol>
+			</PixelProtocols>
+			<SerialProtocols/>
+			<InputProtocols>
+				<Protocol>ddp</Protocol>
+			</InputProtocols>
+			<ConfigDriver>ProPixeler</ConfigDriver>
+		</Variant>
+	</Controller>
+</Vendor>

@@ -35,6 +35,7 @@
 #include "Minleon.h"
 #include "WLED.h"
 #include "Experience.h"
+#include "ProPixeler.h"
 
 #pragma region Constructors and Destructors
 BaseController::BaseController(const std::string& ip, const std::string &proxy) : _ip(ip), _fppProxy(proxy), _baseUrl("") {
@@ -92,6 +93,8 @@ BaseController *BaseController::CreateBaseController(Controller *controller, con
         bc = new Experience(ip, proxy);
     } else if (driver == "WLED") {
         bc = new WLED(ip, proxy);
+    } else if (driver == "ProPixeler") {
+        bc = new ProPixeler(ip, proxy, flip);
     } else {
         logger_base.warn("Vendor not recognized ... assuming it is a FPP based vendor : %s.", (const char*)vendor.c_str());
         bc = new FPP(ip, proxy, caps->GetModel());
